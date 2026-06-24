@@ -238,6 +238,52 @@ def fetch_slate(team=None):
 def home():
     return render_template("index.html")
 
+@app.route("/api/ping")
+def ping():
+    return jsonify({"status": "ok", "message": "awake"})
+
+@app.route("/api/exit-velo")
+def exit_velo():
+    try:
+        return jsonify({"status": "ok", "data": get_cached("exit_velo", fetch_exit_velo), "source": "Baseball Savant"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route("/api/expected-stats")
+def expected_stats():
+    try:
+        return jsonify({"status": "ok", "data": get_cached("expected_stats", fetch_expected_stats), "source": "Baseball Savant"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route("/api/percentile-ranks")
+def percentile_ranks():
+    try:
+        return jsonify({"status": "ok", "data": get_cached("batter_pct", fetch_batter_percentile_ranks), "source": "Baseball Savant"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route("/api/pitcher-expected-stats")
+def pitcher_expected_stats():
+    try:
+        return jsonify({"status": "ok", "data": get_cached("pitcher_xstats", fetch_pitcher_expected_stats), "source": "Baseball Savant"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route("/api/pitcher-arsenal")
+def pitcher_arsenal():
+    try:
+        return jsonify({"status": "ok", "data": get_cached("pitcher_arsenal", fetch_pitcher_arsenal), "source": "Baseball Savant"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route("/api/pitcher-percentile-ranks")
+def pitcher_percentile_ranks():
+    try:
+        return jsonify({"status": "ok", "data": get_cached("pitcher_pct", fetch_pitcher_percentile_ranks), "source": "Baseball Savant"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
 @app.route("/api/slate")
 def slate():
     try:
@@ -248,21 +294,7 @@ def slate():
 
 @app.route("/api/teams")
 def teams():
-    return jsonify({
-        "status": "ok",
-        "teams": [
-            {"code": "NYY", "name": "New York Yankees"},
-            {"code": "LAD", "name": "Los Angeles Dodgers"},
-            {"code": "PHI", "name": "Philadelphia Phillies"},
-            {"code": "ATL", "name": "Atlanta Braves"},
-            {"code": "HOU", "name": "Houston Astros"},
-            {"code": "SD", "name": "San Diego Padres"},
-            {"code": "TB", "name": "Tampa Bay Rays"},
-            {"code": "TOR", "name": "Toronto Blue Jays"},
-            {"code": "SEA", "name": "Seattle Mariners"},
-            {"code": "MIL", "name": "Milwaukee Brewers"},
-        ]
-    })
+    return jsonify({"status": "ok", "teams": [{"code": "NYY", "name": "New York Yankees"}, {"code": "LAD", "name": "Los Angeles Dodgers"}, {"code": "PHI", "name": "Philadelphia Phillies"}, {"code": "ATL", "name": "Atlanta Braves"}, {"code": "HOU", "name": "Houston Astros"}, {"code": "SD", "name": "San Diego Padres"}, {"code": "TB", "name": "Tampa Bay Rays"}, {"code": "TOR", "name": "Toronto Blue Jays"}, {"code": "SEA", "name": "Seattle Mariners"}, {"code": "MIL", "name": "Milwaukee Brewers"}]})
 
 @app.route("/api/columns")
 def columns():
