@@ -1,38 +1,48 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Baseball Savant Dashboard</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 </head>
 <body>
-  <main class="wrap">
-    <header class="top">
-      <h1>Baseball Savant Dashboard</h1>
-      <p>Flask + Render starter for Statcast-style analysis.</p>
+  <div class="wrap">
+    <header>
+      <div>
+        <h1>⚾ Baseball Savant Dashboard</h1>
+        <p id="subtitle">Loading live Statcast data...</p>
+      </div>
+      <div class="header-controls">
+        <select id="viewSelect" onchange="switchView()">
+          <option value="expected">Expected Stats (xBA/xSLG/xwOBA)</option>
+          <option value="exitvelo">Exit Velo & Barrels</option>
+          <option value="percentile">Percentile Ranks</option>
+        </select>
+      </div>
     </header>
-
-    <section class="kpis" id="kpis"></section>
-
-    <section class="card">
-      <h2>Player Board</h2>
-      <table>
-        <thead>
-          <tr>
-            <th>Player</th>
-            <th>xBA</th>
-            <th>xSLG</th>
-            <th>Barrel%</th>
-            <th>Sweet Spot%</th>
-            <th>Edge</th>
-          </tr>
-        </thead>
-        <tbody id="playerTable"></tbody>
-      </table>
+    <section class="kpis" id="kpis">
+      <div class="kpi skeleton"></div>
+      <div class="kpi skeleton"></div>
+      <div class="kpi skeleton"></div>
+      <div class="kpi skeleton"></div>
+      <div class="kpi skeleton"></div>
     </section>
-  </main>
-
+    <section class="card">
+      <div class="card-head">
+        <h2 id="tableTitle">Expected Stats Leaderboard</h2>
+        <span id="dataSource" class="tag">Live · Baseball Savant</span>
+      </div>
+      <div style="overflow-x:auto">
+        <table id="mainTable">
+          <thead id="tableHead"></thead>
+          <tbody id="tableBody">
+            <tr><td colspan="8" class="loading">Loading data from Baseball Savant...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
   <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>
 </html>
