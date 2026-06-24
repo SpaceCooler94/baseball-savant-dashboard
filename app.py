@@ -1,8 +1,3 @@
-Absolutely — here’s the merged `app.py` with the team filter added. It keeps the statcast batter/pitcher endpoints, adds `/api/slate?team=...`, and includes `/api/teams` for your dropdown. [statsapi.mlb](https://statsapi.mlb.com/api/v1/teams)
-
-## Full `app.py`
-
-```python
 from flask import Flask, render_template, jsonify, request
 import datetime
 import time
@@ -243,58 +238,11 @@ def fetch_slate(team=None):
 def home():
     return render_template("index.html")
 
-@app.route("/api/exit-velo")
-def exit_velo():
-    try:
-        return jsonify({"status": "ok", "data": get_cached("exit_velo", fetch_exit_velo), "source": "Baseball Savant"})
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-@app.route("/api/expected-stats")
-def expected_stats():
-    try:
-        return jsonify({"status": "ok", "data": get_cached("expected_stats", fetch_expected_stats), "source": "Baseball Savant"})
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-@app.route("/api/percentile-ranks")
-def percentile_ranks():
-    try:
-        return jsonify({"status": "ok", "data": get_cached("batter_pct", fetch_batter_percentile_ranks), "source": "Baseball Savant"})
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-@app.route("/api/pitcher-expected-stats")
-def pitcher_expected_stats():
-    try:
-        return jsonify({"status": "ok", "data": get_cached("pitcher_xstats", fetch_pitcher_expected_stats), "source": "Baseball Savant"})
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-@app.route("/api/pitcher-arsenal")
-def pitcher_arsenal():
-    try:
-        return jsonify({"status": "ok", "data": get_cached("pitcher_arsenal", fetch_pitcher_arsenal), "source": "Baseball Savant"})
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-@app.route("/api/pitcher-percentile-ranks")
-def pitcher_percentile_ranks():
-    try:
-        return jsonify({"status": "ok", "data": get_cached("pitcher_pct", fetch_pitcher_percentile_ranks), "source": "Baseball Savant"})
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
-
 @app.route("/api/slate")
 def slate():
     try:
         team = request.args.get("team")
-        return jsonify({
-            "status": "ok",
-            "data": get_cached(f"slate_{team or 'all'}", lambda: fetch_slate(team)),
-            "source": "MLB StatsAPI",
-            "date": datetime.datetime.now().strftime("%B %d, %Y")
-        })
+        return jsonify({"status": "ok", "data": get_cached(f"slate_{team or 'all'}", lambda: fetch_slate(team)), "source": "MLB StatsAPI", "date": datetime.datetime.now().strftime("%B %d, %Y")})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
@@ -335,20 +283,9 @@ def kpis():
         avg_brl = round(sum(p.get("barrel_pct", 0) for p in ev) / max(len(ev), 1), 1)
         avg_xwoba = round(sum(p.get("xwoba", 0) for p in xs) / max(len(xs), 1), 3)
         top_edge = max(xs, key=lambda p: p.get("edge") or 0)["player"] if xs else "N/A"
-        return jsonify({
-            "status": "ok",
-            "avg_exit_velo": avg_ev,
-            "avg_barrel_rate": avg_brl,
-            "avg_xwoba": avg_xwoba,
-            "top_positive_edge": top_edge,
-            "games_today": len(sl),
-            "year": datetime.datetime.now().year
-        })
+        return jsonify({"status": "ok", "avg_exit_velo": avg_ev, "avg_barrel_rate": avg_brl, "avg_xwoba": avg_xwoba, "top_positive_edge": top_edge, "games_today": len(sl), "year": datetime.datetime.now().year})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
 if __name__ == "__main__":
     app.run(debug=True)
-```
-
-This version should work with your current Render app and let you filter the slate by team right away.
