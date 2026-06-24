@@ -1,4 +1,9 @@
-from flask import Flask, render_template, jsonify
+Absolutely — here’s the merged `app.py` with the team filter added. It keeps the statcast batter/pitcher endpoints, adds `/api/slate?team=...`, and includes `/api/teams` for your dropdown. [statsapi.mlb](https://statsapi.mlb.com/api/v1/teams)
+
+## Full `app.py`
+
+```python
+from flask import Flask, render_template, jsonify, request
 import datetime
 import time
 import requests
@@ -42,6 +47,51 @@ def rename_if_exists(df, mapping):
     df.rename(columns={k: v for k, v in mapping.items() if k in df.columns}, inplace=True)
     return df
 
+def normalize_team(team):
+    if not team:
+        return None
+    return team.strip().upper()
+
+TEAM_ALIASES = {
+    "LAA": ["LAA", "ANGELS", "LOS ANGELES ANGELS", "LA ANGELS"],
+    "ARI": ["ARI", "DIAMONDBACKS", "ARIZONA DIAMONDBACKS", "D-BACKS"],
+    "BAL": ["BAL", "ORIOLES", "BALTIMORE ORIOLES"],
+    "BOS": ["BOS", "RED SOX", "BOSTON RED SOX"],
+    "CHC": ["CHC", "CUBS", "CHICAGO CUBS"],
+    "CIN": ["CIN", "REDS", "CINCINNATI REDS"],
+    "CLE": ["CLE", "GUARDIANS", "CLEVELAND GUARDIANS"],
+    "COL": ["COL", "ROCKIES", "COLORADO ROCKIES"],
+    "DET": ["DET", "TIGERS", "DETROIT TIGERS"],
+    "HOU": ["HOU", "ASTROS", "HOUSTON ASTROS"],
+    "KC": ["KC", "ROYALS", "KANSAS CITY ROYALS"],
+    "LAD": ["LAD", "DODGERS", "LOS ANGELES DODGERS"],
+    "MIA": ["MIA", "MARLINS", "MIAMI MARLINS"],
+    "MIL": ["MIL", "BREWERS", "MILWAUKEE BREWERS"],
+    "MIN": ["MIN", "TWINS", "MINNESOTA TWINS"],
+    "NYM": ["NYM", "METS", "NEW YORK METS"],
+    "NYY": ["NYY", "YANKEES", "NEW YORK YANKEES"],
+    "PHI": ["PHI", "PHILLIES", "PHILADELPHIA PHILLIES"],
+    "PIT": ["PIT", "PIRATES", "PITTSBURGH PIRATES"],
+    "SD": ["SD", "PADRES", "SAN DIEGO PADRES"],
+    "SEA": ["SEA", "MARINERS", "SEATTLE MARINERS"],
+    "SF": ["SF", "GIANTS", "SAN FRANCISCO GIANTS"],
+    "STL": ["STL", "CARDINALS", "ST. LOUIS CARDINALS"],
+    "TB": ["TB", "RAYS", "TAMPA BAY RAYS"],
+    "TEX": ["TEX", "RANGERS", "TEXAS RANGERS"],
+    "TOR": ["TOR", "BLUE JAYS", "TORONTO BLUE JAYS"],
+    "WSH": ["WSH", "NATIONALS", "WASHINGTON NATIONALS"],
+    "ATL": ["ATL", "BRAVES", "ATLANTA BRAVES"],
+    "CWS": ["CWS", "WHITE SOX", "CHICAGO WHITE SOX"],
+}
+
+def team_match(team_val, selected):
+    if not selected:
+        return True
+    selected = normalize_team(selected)
+    val = normalize_team(team_val)
+    aliases = TEAM_ALIASES.get(selected, [selected])
+    return val in aliases or team_val == selected
+
 def fetch_exit_velo():
     from pybaseball import statcast_batter_exitvelo_barrels
     df = statcast_batter_exitvelo_barrels(datetime.datetime.now().year, minBBE=50)
@@ -59,7 +109,6 @@ def fetch_exit_velo():
 def fetch_expected_stats():
     from pybaseball import statcast_batter_expected_stats
     df = statcast_batter_expected_stats(datetime.datetime.now().year, minPA=100)
-
     name_col = find_col(df, ["last_name, first_name", "player_name", "name", "Name"])
     pa_col = find_col(df, ["pa", "PA", "plate_appearances"])
     xba_col = find_col(df, ["est_ba", "xba", "x_ba", "expected_batting_avg"])
@@ -68,12 +117,10 @@ def fetch_expected_stats():
     xobp_col = find_col(df, ["est_obp", "xobp", "x_obp", "expected_obp"])
     woba_col = find_col(df, ["woba", "w_oba"])
     ba_col = find_col(df, ["batting_avg", "ba", "avg", "batting_average"])
-
     cols = [c for c in [name_col, pa_col, xba_col, xslg_col, xwoba_col, xobp_col, woba_col, ba_col] if c]
     if not cols:
         return []
     df = df[cols].head(25).copy()
-
     rename_map = {}
     if name_col: rename_map[name_col] = "player"
     if pa_col: rename_map[pa_col] = "pa"
@@ -84,7 +131,6 @@ def fetch_expected_stats():
     if woba_col: rename_map[woba_col] = "woba"
     if ba_col: rename_map[ba_col] = "ba"
     rename_if_exists(df, rename_map)
-
     df = df.round(3)
     if "xwoba" in df.columns and "woba" in df.columns:
         df["edge"] = (df["xwoba"] - df["woba"]).round(3)
@@ -105,7 +151,6 @@ def fetch_batter_percentile_ranks():
 def fetch_pitcher_expected_stats():
     from pybaseball import statcast_pitcher_expected_stats
     df = statcast_pitcher_expected_stats(datetime.datetime.now().year, minPA=100)
-
     name_col = find_col(df, ["last_name, first_name", "player_name", "name"])
     pa_col = find_col(df, ["pa", "PA", "plate_appearances"])
     xba_col = find_col(df, ["est_ba", "xba", "x_ba", "expected_batting_avg"])
@@ -114,12 +159,10 @@ def fetch_pitcher_expected_stats():
     xera_col = find_col(df, ["est_era", "xera", "x_era", "expected_era"])
     era_col = find_col(df, ["era", "ERA", "p_era"])
     woba_col = find_col(df, ["woba", "w_oba"])
-
     cols = [c for c in [name_col, pa_col, xba_col, xslg_col, xwoba_col, xera_col, era_col, woba_col] if c]
     if not cols:
         return []
     df = df[cols].head(25).copy()
-
     rename_map = {}
     if name_col: rename_map[name_col] = "player"
     if pa_col: rename_map[pa_col] = "pa"
@@ -130,7 +173,6 @@ def fetch_pitcher_expected_stats():
     if era_col: rename_map[era_col] = "era"
     if woba_col: rename_map[woba_col] = "woba"
     rename_if_exists(df, rename_map)
-
     df = df.round(3)
     if "xwoba" in df.columns and "woba" in df.columns:
         df["edge"] = (df["woba"] - df["xwoba"]).round(3)
@@ -164,7 +206,7 @@ def fetch_pitcher_percentile_ranks():
         rename_if_exists(df, {name_col: "player"})
     return df_to_records(df)
 
-def fetch_slate():
+def fetch_slate(team=None):
     today = datetime.datetime.now().strftime("%m/%d/%Y")
     url = f"https://statsapi.mlb.com/api/v1/schedule?sportId=1&date={today}&hydrate=probablePitcher,lineScore"
     r = requests.get(url, timeout=10)
@@ -178,16 +220,23 @@ def fetch_slate():
             def pitcher_info(side):
                 p = side.get("probablePitcher")
                 return p.get("fullName", "TBD") if p else "TBD"
-            games.append({
+            away_team = away["team"]["name"]
+            home_team = home["team"]["name"]
+            game = {
                 "game_pk": g.get("gamePk"),
                 "status": g.get("status", {}).get("detailedState", "Scheduled"),
                 "game_time_utc": g.get("gameDate", ""),
-                "away_team": away["team"]["name"],
-                "home_team": home["team"]["name"],
+                "away_team": away_team,
+                "home_team": home_team,
                 "away_pitcher": pitcher_info(away),
                 "home_pitcher": pitcher_info(home),
                 "venue": g.get("venue", {}).get("name", ""),
-            })
+            }
+            if team:
+                if team_match(away_team, team) or team_match(home_team, team):
+                    games.append(game)
+            else:
+                games.append(game)
     return games
 
 @app.route("/")
@@ -239,9 +288,33 @@ def pitcher_percentile_ranks():
 @app.route("/api/slate")
 def slate():
     try:
-        return jsonify({"status": "ok", "data": get_cached("slate", fetch_slate), "source": "MLB StatsAPI", "date": datetime.datetime.now().strftime("%B %d, %Y")})
+        team = request.args.get("team")
+        return jsonify({
+            "status": "ok",
+            "data": get_cached(f"slate_{team or 'all'}", lambda: fetch_slate(team)),
+            "source": "MLB StatsAPI",
+            "date": datetime.datetime.now().strftime("%B %d, %Y")
+        })
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route("/api/teams")
+def teams():
+    return jsonify({
+        "status": "ok",
+        "teams": [
+            {"code": "NYY", "name": "New York Yankees"},
+            {"code": "LAD", "name": "Los Angeles Dodgers"},
+            {"code": "PHI", "name": "Philadelphia Phillies"},
+            {"code": "ATL", "name": "Atlanta Braves"},
+            {"code": "HOU", "name": "Houston Astros"},
+            {"code": "SD", "name": "San Diego Padres"},
+            {"code": "TB", "name": "Tampa Bay Rays"},
+            {"code": "TOR", "name": "Toronto Blue Jays"},
+            {"code": "SEA", "name": "Seattle Mariners"},
+            {"code": "MIL", "name": "Milwaukee Brewers"},
+        ]
+    })
 
 @app.route("/api/columns")
 def columns():
@@ -257,14 +330,25 @@ def kpis():
     try:
         ev = get_cached("exit_velo", fetch_exit_velo)
         xs = get_cached("expected_stats", fetch_expected_stats)
-        sl = get_cached("slate", fetch_slate)
+        sl = get_cached("slate_all", lambda: fetch_slate(None))
         avg_ev = round(sum(p.get("avg_exit_velo", 0) for p in ev) / max(len(ev), 1), 1)
         avg_brl = round(sum(p.get("barrel_pct", 0) for p in ev) / max(len(ev), 1), 1)
         avg_xwoba = round(sum(p.get("xwoba", 0) for p in xs) / max(len(xs), 1), 3)
         top_edge = max(xs, key=lambda p: p.get("edge") or 0)["player"] if xs else "N/A"
-        return jsonify({"status": "ok", "avg_exit_velo": avg_ev, "avg_barrel_rate": avg_brl, "avg_xwoba": avg_xwoba, "top_positive_edge": top_edge, "games_today": len(sl), "year": datetime.datetime.now().year})
+        return jsonify({
+            "status": "ok",
+            "avg_exit_velo": avg_ev,
+            "avg_barrel_rate": avg_brl,
+            "avg_xwoba": avg_xwoba,
+            "top_positive_edge": top_edge,
+            "games_today": len(sl),
+            "year": datetime.datetime.now().year
+        })
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
 if __name__ == "__main__":
     app.run(debug=True)
+```
+
+This version should work with your current Render app and let you filter the slate by team right away.
