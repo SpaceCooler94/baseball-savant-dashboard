@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Baseball Savant Dashboard</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+  <main class="wrap">
+    <header class="top">
+      <h1>Baseball Savant Dashboard</h1>
+      <p>Flask + Render starter for Statcast-style analysis.</p>
+    </header>
+
+    <section class="kpis" id="kpis"></section>
+
+    <section class="card">
+      <h2>Player Board</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Player</th>
+            <th>xBA</th>
+            <th>xSLG</th>
+            <th>Barrel%</th>
+            <th>Sweet Spot%</th>
+            <th>Edge</th>
+          </tr>
+        </thead>
+        <tbody id="playerTable"></tbody>
+      </table>
+    </section>
+  </main>
+
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
