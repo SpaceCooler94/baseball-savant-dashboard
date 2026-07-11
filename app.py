@@ -346,8 +346,15 @@ def kpis():
         # Frontend (static/app.js) reads json.avg_hard_hit for the "Avg Hard Hit%" tile,
         # but this route never returned it -> the tile showed "undefined%". The exit-velo
         # records already carry hard_hit_pct (fetch_exit_velo renames hard_hit_percent to
-        # hard_hit_pct), so average that the same way as the other tiles.
-        avg_hh = round(sum(p.get("hard_hit_pct", 0) for p in ev) / max(len(ev), 1), 1)
+        # hard_hit_pct), so average that. Guard each value: pybaseball can return None or
+        # non-numeric for a field on some rows, and a bare sum() would 500 the whole route.
+        def _num(x):
+            try:
+                f = float(x)
+                return f if f == f else 0.0  # f != f screens out NaN
+            except (TypeError, ValueError):
+                return 0.0
+        avg_hh = round(sum(_num(p.get("hard_hit_pct")) for p in ev) / max(len(ev), 1), 1)
         avg_xwoba = round(sum(p.get("xwoba", 0) for p in xs) / max(len(xs), 1), 3)
         top_edge = max(xs, key=lambda p: p.get("edge") or 0)["player"] if xs else "N/A"
         return jsonify({"status": "ok", "avg_exit_velo": avg_ev, "avg_barrel_rate": avg_brl, "avg_hard_hit": avg_hh, "avg_xwoba": avg_xwoba, "top_positive_edge": top_edge, "games_today": len(sl), "year": datetime.datetime.now().year})
@@ -362,6 +369,32 @@ def api_calibration():
         # "run uncalibrated" and falls back to raw log5. Cleaner for the JS than a 404.
         source = "log5 backtest" if cal else "no calibration committed yet"
         return jsonify({"status": "ok", "data": cal, "source": source})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+# Serves the daily board that the GitHub Action builds and commits. This is what
+# MLB_Daily.js (the one thin-client script) fetches. Reading a committed file is
+# instant -- the only slowness is the free-tier cold-start wake, which the phone
+# script already retries through. data:None means the Action hasn't produced a board
+# yet (e.g. before the first run), which the phone script shows as "not published".
+def load_daily_board():
+    path = os.path.join(os.path.dirname(__file__), "daily_board.json")
+    if not os.path.exists(path):
+        return None
+    try:
+        with open(path, "r") as f:
+            return json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return None
+
+@app.route("/api/daily-board")
+def api_daily_board():
+    try:
+        # Short cache (5 min) -- the file only changes once a day when the Action runs,
+        # but a brief cache spares disk reads if the phone is hit repeatedly.
+        board = get_cached("daily_board", load_daily_board)
+        source = "github-actions log5 model" if board else "no board published yet"
+        return jsonify({"status": "ok", "data": board, "source": source})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
