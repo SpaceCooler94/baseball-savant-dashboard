@@ -283,6 +283,41 @@ def fetch_savant_metrics():
 
 # --------------------------- schedule + pitchers ----------------------------
 
+def fetch_pitcher_pitch_mix():
+    """Bulk-pull starting pitchers' pitch usage (FB/SL/CH/CB %) from Savant, keyed by
+    normalized name. ONE call for the whole league, not per-pitcher. This is REFERENCE
+    data shown in the detail panel -- it does NOT feed the log5 projection (the model
+    is built on rate stats, not pitch-type matchups). Best-effort: any failure returns
+    {} and the pitch-mix row simply shows nothing. Columns accessed via find_col so a
+    Savant rename degrades to null rather than crashing."""
+    mix = {}
+    try:
+        from pybaseball import statcast_pitcher_arsenal_stats
+    except Exception:
+        return mix
+    try:
+        df = statcast_pitcher_arsenal_stats(YEAR, minPA=50)
+        name_c = find_col(df, ["last_name, first_name", "player_name", "name"])
+        pitch_c = find_col(df, ["pitch_name", "pitch_type", "pitch"])
+        usage_c = find_col(df, ["pitch_usage", "pitch_percent", "usage", "pa"])
+        if name_c and pitch_c and usage_c:
+            for _, row in df.iterrows():
+                k = _norm_name(row.get(name_c))
+                if not k:
+                    continue
+                pitch = str(row.get(pitch_c) or "").strip()
+                usage = nv(row.get(usage_c))
+                if not pitch or usage is None:
+                    continue
+                mix.setdefault(k, []).append({"pitch": pitch, "usage": usage})
+        # Keep each pitcher's top pitches by usage, capped at 5 for display.
+        for k in mix:
+            mix[k] = sorted(mix[k], key=lambda x: x["usage"], reverse=True)[:5]
+    except Exception:
+        pass
+    return mix
+
+
 def get_pitcher_rates(pid):
     """Season hit-rate-allowed and HR-rate-allowed per batter faced, from StatsAPI.
     Mirrors the fields buildPitcherProfile() computes in the JS."""
@@ -354,6 +389,7 @@ def build_board():
     pool = build_batter_pool()
     # Merge Savant advanced metrics (bulk fetch, name-joined) onto each hitter.
     savant = fetch_savant_metrics()
+    pitch_mix = fetch_pitcher_pitch_mix()
     for h in pool:
         sm = savant.get(_norm_name(h.get("name")), {})
         h["_savant"] = sm  # stashed for the display metrics block below
@@ -380,8 +416,10 @@ def build_board():
         ap = get_pitcher_rates(away_prob["id"]) if away_prob and away_prob.get("id") else None
         if hp and home_prob:
             hp["name"] = home_prob.get("fullName")
+            hp["pitchMix"] = pitch_mix.get(_norm_name(hp["name"]))
         if ap and away_prob:
             ap["name"] = away_prob.get("fullName")
+            ap["pitchMix"] = pitch_mix.get(_norm_name(ap["name"]))
 
         ctx = {"park": park, "weather": {}}  # weather omitted in v1; model treats temp=None safely
 
