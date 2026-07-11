@@ -187,6 +187,10 @@ def build_batter_pool():
                 "bbPct": (nv(st.get("baseOnBalls")) / pa * 100) if (nv(st.get("baseOnBalls")) is not None and pa) else None,
                 "hr": nv(st.get("homeRuns")),
                 "hrRate": (nv(st.get("homeRuns")) / pa * 100) if (nv(st.get("homeRuns")) is not None and pa) else None,
+                # K% and BABIP come straight from the same season stat block (real data,
+                # not estimated). K% = strikeOuts/PA; BABIP StatsAPI provides directly.
+                "kPct": (nv(st.get("strikeOuts")) / pa * 100) if (nv(st.get("strikeOuts")) is not None and pa) else None,
+                "babip": nv(st.get("babip")),
                 "vsLAvg": vs_l_avg,
                 "vsRAvg": vs_r_avg,
                 # Recent-form OPS still null in this version -- would need gameLog per
@@ -227,13 +231,19 @@ def fetch_savant_metrics():
     def col(df, cands):
         return find_col(df, cands)
 
-    # Exit velo / barrels
+    # Exit velo / barrels (+ batted-ball direction if present on this endpoint)
     try:
         ev = statcast_batter_exitvelo_barrels(YEAR, minBBE=25)
         name_c = col(ev, ["last_name, first_name", "player_name", "name"])
         brl_c = col(ev, ["barrel_batted_rate", "brl_percent"])
         hh_c = col(ev, ["hard_hit_percent", "hard_hit_rate"])
         ev_c = col(ev, ["avg_hit_speed", "exit_velocity_avg", "avg_hit_velo"])
+        # These may or may not be on this endpoint depending on pybaseball version.
+        # find_col returns None if absent, so they populate when available and stay
+        # null otherwise -- no extra API call, no crash if the columns aren't there.
+        pull_c = col(ev, ["pull_percent", "pull_pct", "pulled_barrels_pct"])
+        fb_c = col(ev, ["flyball_percent", "fly_ball_percent", "fb_percent", "flyballs_percent"])
+        ss_c = col(ev, ["sweet_spot_percent", "sweetspot_percent", "sweet_spot_pct"])
         if name_c:
             for _, row in ev.iterrows():
                 k = _norm_name(row.get(name_c))
@@ -243,6 +253,9 @@ def fetch_savant_metrics():
                 if brl_c: m["barrelPct"] = nv(row.get(brl_c))
                 if hh_c: m["hardHitPct"] = nv(row.get(hh_c))
                 if ev_c: m["avgEV"] = nv(row.get(ev_c))
+                if pull_c: m["pullPct"] = nv(row.get(pull_c))
+                if fb_c: m["fbPct"] = nv(row.get(fb_c))
+                if ss_c: m["sweetSpotPct"] = nv(row.get(ss_c))
     except Exception:
         pass
 
@@ -303,6 +316,10 @@ def get_pitcher_rates(pid):
         "hitRateAllowedPerPA": hit_rate_allowed,
         "hrRateAllowedPerPA": hr_rate_allowed,
         "battersFaced": bf,
+        # WHIP and HR/9 come straight from the same season stat block (real data) --
+        # these populate the pitcher fields in the detail panel that were showing "—".
+        "whip": nv(st.get("whip")),
+        "hrPer9": nv(st.get("homeRunsPer9")),
     }
 
 
@@ -387,15 +404,17 @@ def build_board():
                     "viewScore": (hit["perGame"] + hr["perGame"]),
                     "metrics": {
                         "avg": nv(h.get("avg")), "obp": nv(h.get("obp")), "hr": nv(h.get("hr")),
-                        "hrRate": nv(h.get("hrRate")), "kPct": None, "babip": None,
+                        "hrRate": nv(h.get("hrRate")),
+                        "kPct": nv(h.get("kPct")), "babip": nv(h.get("babip")),
                         "barrelPct": (h.get("_savant") or {}).get("barrelPct"),
                         "hardHitPct": (h.get("_savant") or {}).get("hardHitPct"),
                         "avgEV": (h.get("_savant") or {}).get("avgEV"),
-                        "pullPct": None, "fbPct": None,
+                        "pullPct": (h.get("_savant") or {}).get("pullPct"),
+                        "fbPct": (h.get("_savant") or {}).get("fbPct"),
                         "xBA": (h.get("_savant") or {}).get("xBA"),
                         "xSLG": (h.get("_savant") or {}).get("xSLG"),
                         "xwOBA": (h.get("_savant") or {}).get("xwOBA"),
-                        "sweetSpotPct": None,
+                        "sweetSpotPct": (h.get("_savant") or {}).get("sweetSpotPct"),
                     },
                 })
             out.sort(key=lambda x: x["viewScore"], reverse=True)
@@ -413,8 +432,8 @@ def build_board():
             "weather": {},
             "homeTeam": {"name": home.get("name"), "abbr": home_abbr},
             "awayTeam": {"name": away.get("name"), "abbr": away_abbr},
-            "homeProbable": {"name": hp["name"], "hand": hp.get("hand")} if hp else None,
-            "awayProbable": {"name": ap["name"], "hand": ap.get("hand")} if ap else None,
+            "homeProbable": {"name": hp["name"], "hand": hp.get("hand"), "whip": hp.get("whip"), "hrPer9": hp.get("hrPer9")} if hp else None,
+            "awayProbable": {"name": ap["name"], "hand": ap.get("hand"), "whip": ap.get("whip"), "hrPer9": ap.get("hrPer9")} if ap else None,
             "homeMatchups": home_hitters,
             "awayMatchups": away_hitters,
             "topHitTargets": sorted(all_h, key=lambda x: x["hitProb"], reverse=True)[:8],
