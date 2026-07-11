@@ -3,6 +3,8 @@ import datetime
 import time
 import requests
 import math
+import os
+import json
 
 app = Flask(__name__)
 
@@ -17,6 +19,34 @@ def get_cached(key, fetch_fn):
             return data
     data = fetch_fn()
     _cache[key] = (data, now)
+    return data
+
+# ============================================================================
+# Calibration for Daily_Matchups.js v5.1 (log5 model).
+# Keep MODEL_VERSION in lockstep with MODEL_VERSION in Daily_Matchups.js. If the
+# log5 formula there changes, bump both -- Scriptable ignores a calibration file
+# whose modelVersion doesn't match and falls back to raw/uncalibrated output.
+#
+# RENDER FREE TIER: the filesystem is ephemeral (wiped on redeploy and on dyno
+# sleep after ~15 min idle). Do NOT write calibration.json at runtime and expect
+# it to persist. Instead run the backtest in your Windows Python stack
+# (C:\Users\astro\hitter\), then COMMIT calibration.json into this repo so it
+# ships with each deploy. This route just serves that committed file.
+# ============================================================================
+MODEL_VERSION = "log5-v5.0"
+CALIBRATION_PATH = os.path.join(os.path.dirname(__file__), "calibration.json")
+
+def load_calibration_file():
+    if not os.path.exists(CALIBRATION_PATH):
+        return None
+    try:
+        with open(CALIBRATION_PATH, "r") as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return None
+    # Version gate: refuse to serve calibration fit for a different model version.
+    if not isinstance(data, dict) or data.get("modelVersion") != MODEL_VERSION:
+        return None
     return data
 
 def df_to_records(df):
@@ -313,9 +343,25 @@ def kpis():
         sl = get_cached("slate_all", lambda: fetch_slate(None))
         avg_ev = round(sum(p.get("avg_exit_velo", 0) for p in ev) / max(len(ev), 1), 1)
         avg_brl = round(sum(p.get("barrel_pct", 0) for p in ev) / max(len(ev), 1), 1)
+        # Frontend (static/app.js) reads json.avg_hard_hit for the "Avg Hard Hit%" tile,
+        # but this route never returned it -> the tile showed "undefined%". The exit-velo
+        # records already carry hard_hit_pct (fetch_exit_velo renames hard_hit_percent to
+        # hard_hit_pct), so average that the same way as the other tiles.
+        avg_hh = round(sum(p.get("hard_hit_pct", 0) for p in ev) / max(len(ev), 1), 1)
         avg_xwoba = round(sum(p.get("xwoba", 0) for p in xs) / max(len(xs), 1), 3)
         top_edge = max(xs, key=lambda p: p.get("edge") or 0)["player"] if xs else "N/A"
-        return jsonify({"status": "ok", "avg_exit_velo": avg_ev, "avg_barrel_rate": avg_brl, "avg_xwoba": avg_xwoba, "top_positive_edge": top_edge, "games_today": len(sl), "year": datetime.datetime.now().year})
+        return jsonify({"status": "ok", "avg_exit_velo": avg_ev, "avg_barrel_rate": avg_brl, "avg_hard_hit": avg_hh, "avg_xwoba": avg_xwoba, "top_positive_edge": top_edge, "games_today": len(sl), "year": datetime.datetime.now().year})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route("/api/calibration")
+def api_calibration():
+    try:
+        cal = get_cached("calibration_file", load_calibration_file)
+        # data:None is a valid, non-error response -- Daily_Matchups.js reads it as
+        # "run uncalibrated" and falls back to raw log5. Cleaner for the JS than a 404.
+        source = "log5 backtest" if cal else "no calibration committed yet"
+        return jsonify({"status": "ok", "data": cal, "source": source})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
