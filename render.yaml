@@ -5,3 +5,12 @@ services:
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn app:app
     plan: free
+    envVars:
+      # Pin Python to 3.11 so the pinned pandas/numpy (and pybaseball's transitive
+      # pyarrow/lxml) install as prebuilt wheels. On Render's default 3.14 they try to
+      # compile from source and fail (ModuleNotFoundError: pkg_resources). When
+      # render.yaml exists, Render reads the version from here -- runtime.txt /
+      # .python-version are ignored for blueprint services, which is why those didn't
+      # take effect.
+      - key: PYTHON_VERSION
+        value: "3.11.9"
