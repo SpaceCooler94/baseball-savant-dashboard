@@ -1,13 +1,18 @@
-# Requirements for the GitHub Action that builds the daily board.
-# Separate from the repo's app.py requirements on purpose: pybaseball 2.2.7 declares
-# only "pandas>=1.0.3" with NO upper bound, so a fresh install pulls pandas 3.0 /
-# numpy 2.5, which pybaseball 2.2.x was never tested against and can break on. Pinning
-# to the last pandas 2.x / numpy 1.x line keeps the Action's run reproducible instead
-# of depending on whatever pip resolves that day.
+# Single requirements file used by BOTH Render (the web app) and the GitHub Action
+# (the daily-board build). It must therefore contain everything both need.
+#
+# Render needs: Flask + gunicorn to serve the app.
+# The Action needs: pybaseball + its data stack, with pandas/numpy PINNED -- pybaseball
+# 2.2.7 declares only "pandas>=1.0.3" (no upper bound), so an unpinned install pulls
+# pandas 3.0 / numpy 2.5, which pybaseball 2.2.x was never tested against and breaks on.
+# Pinning to the last pandas 2.x / numpy 1.x line keeps both environments reproducible.
+
+Flask==3.0.3
+gunicorn==22.0.0
+requests==2.32.3
 pybaseball==2.2.7
 pandas==2.2.3
 numpy==1.26.4
-requests==2.32.3
 lxml==5.3.0
 beautifulsoup4==4.12.3
 pyarrow==17.0.0
