@@ -234,16 +234,24 @@ def fetch_savant_metrics():
     # Exit velo / barrels (+ batted-ball direction if present on this endpoint)
     try:
         ev = statcast_batter_exitvelo_barrels(YEAR, minBBE=25)
+        # pybaseball runs sanitize_statcast_columns() on this data, renaming the raw
+        # Savant headers -- which is why an earlier guess ("hard_hit_percent") missed
+        # even though barrel worked. Log the real columns ONCE so the Action output
+        # reveals the actual names; tighten candidates below if any stay null.
+        try:
+            print("SAVANT exitvelo columns:", list(ev.columns))
+        except Exception:
+            pass
         name_c = col(ev, ["last_name, first_name", "player_name", "name"])
-        brl_c = col(ev, ["barrel_batted_rate", "brl_percent"])
-        hh_c = col(ev, ["hard_hit_percent", "hard_hit_rate"])
-        ev_c = col(ev, ["avg_hit_speed", "exit_velocity_avg", "avg_hit_velo"])
+        brl_c = col(ev, ["barrel_batted_rate", "brl_percent", "barrels_per_bbe_percent"])
+        hh_c = col(ev, ["hard_hit_percent", "hard_hit_rate", "ev95percent", "hardhit_percent", "hard_hit_pct"])
+        ev_c = col(ev, ["avg_hit_speed", "exit_velocity_avg", "avg_hit_velo", "avg_hit_speed_mph"])
         # These may or may not be on this endpoint depending on pybaseball version.
         # find_col returns None if absent, so they populate when available and stay
         # null otherwise -- no extra API call, no crash if the columns aren't there.
         pull_c = col(ev, ["pull_percent", "pull_pct", "pulled_barrels_pct"])
         fb_c = col(ev, ["flyball_percent", "fly_ball_percent", "fb_percent", "flyballs_percent"])
-        ss_c = col(ev, ["sweet_spot_percent", "sweetspot_percent", "sweet_spot_pct"])
+        ss_c = col(ev, ["sweet_spot_percent", "sweetspot_percent", "sweet_spot_pct", "anglesweetspotpercent"])
         if name_c:
             for _, row in ev.iterrows():
                 k = _norm_name(row.get(name_c))
@@ -291,15 +299,26 @@ def fetch_pitcher_pitch_mix():
     {} and the pitch-mix row simply shows nothing. Columns accessed via find_col so a
     Savant rename degrades to null rather than crashing."""
     mix = {}
+    arsenal_fn = None
     try:
-        from pybaseball import statcast_pitcher_arsenal_stats
+        # Try the arsenal-stats function; fall back to the alternate name if the
+        # installed pybaseball version exposes it differently. 0 pitchers on the last
+        # run means one of these (or the columns) was off.
+        try:
+            from pybaseball import statcast_pitcher_arsenal_stats as arsenal_fn
+        except Exception:
+            from pybaseball import statcast_pitcher_pitch_arsenal as arsenal_fn
     except Exception:
         return mix
     try:
-        df = statcast_pitcher_arsenal_stats(YEAR, minPA=50)
+        df = arsenal_fn(YEAR, minPA=50)
+        try:
+            print("SAVANT arsenal columns:", list(df.columns))
+        except Exception:
+            pass
         name_c = find_col(df, ["last_name, first_name", "player_name", "name"])
         pitch_c = find_col(df, ["pitch_name", "pitch_type", "pitch"])
-        usage_c = find_col(df, ["pitch_usage", "pitch_percent", "usage", "pa"])
+        usage_c = find_col(df, ["pitch_usage", "pitch_percent", "usage", "pitch_usage_percent", "percent_usage"])
         if name_c and pitch_c and usage_c:
             for _, row in df.iterrows():
                 k = _norm_name(row.get(name_c))
