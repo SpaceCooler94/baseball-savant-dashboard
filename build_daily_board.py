@@ -249,15 +249,18 @@ def fetch_savant_metrics():
         except Exception:
             pass
         name_c = col(ev, ["last_name, first_name", "player_name", "name"])
-        brl_c = col(ev, ["barrel_batted_rate", "brl_percent", "barrels_per_bbe_percent"])
-        hh_c = col(ev, ["hard_hit_percent", "hard_hit_rate", "ev95percent", "hardhit_percent", "hard_hit_pct"])
-        ev_c = col(ev, ["avg_hit_speed", "exit_velocity_avg", "avg_hit_velo", "avg_hit_speed_mph"])
-        # These may or may not be on this endpoint depending on pybaseball version.
-        # find_col returns None if absent, so they populate when available and stay
-        # null otherwise -- no extra API call, no crash if the columns aren't there.
-        pull_c = col(ev, ["pull_percent", "pull_pct", "pulled_barrels_pct"])
-        fb_c = col(ev, ["flyball_percent", "fly_ball_percent", "fb_percent", "flyballs_percent"])
-        ss_c = col(ev, ["sweet_spot_percent", "sweetspot_percent", "sweet_spot_pct", "anglesweetspotpercent"])
+        brl_c = col(ev, ["brl_percent", "barrel_batted_rate"])
+        # Confirmed real column names (logged from the live Action run):
+        # hard-hit% is ev95percent (share of balls hit 95+ mph); sweet-spot is
+        # anglesweetspotpercent; avg EV is avg_hit_speed.
+        hh_c = col(ev, ["ev95percent", "hard_hit_percent", "hard_hit_rate"])
+        ev_c = col(ev, ["avg_hit_speed", "exit_velocity_avg"])
+        ss_c = col(ev, ["anglesweetspotpercent", "sweet_spot_percent"])
+        # This endpoint has NO pull%. Batted-ball direction is only fbld (fly+line drive)
+        # and gb (ground ball) as raw COUNTS -- so FB% can be derived as fbld/(fbld+gb),
+        # but pull% simply isn't available here and stays null (honest gap).
+        fbld_c = col(ev, ["fbld"])
+        gb_c = col(ev, ["gb"])
         if name_c:
             for _, row in ev.iterrows():
                 k = _norm_name(row.get(name_c))
@@ -267,9 +270,12 @@ def fetch_savant_metrics():
                 if brl_c: m["barrelPct"] = nv(row.get(brl_c))
                 if hh_c: m["hardHitPct"] = nv(row.get(hh_c))
                 if ev_c: m["avgEV"] = nv(row.get(ev_c))
-                if pull_c: m["pullPct"] = nv(row.get(pull_c))
-                if fb_c: m["fbPct"] = nv(row.get(fb_c))
                 if ss_c: m["sweetSpotPct"] = nv(row.get(ss_c))
+                # Derive FB% from counts when both are present.
+                if fbld_c and gb_c:
+                    fbld = nv(row.get(fbld_c)); gb = nv(row.get(gb_c))
+                    if fbld is not None and gb is not None and (fbld + gb) > 0:
+                        m["fbPct"] = round(fbld / (fbld + gb) * 100, 1)
     except Exception:
         pass
 
@@ -324,7 +330,10 @@ def fetch_pitcher_pitch_mix():
             pass
         name_c = find_col(df, ["last_name, first_name", "player_name", "name"])
         pitch_c = find_col(df, ["pitch_name", "pitch_type", "pitch"])
-        usage_c = find_col(df, ["pitch_usage", "pitch_percent", "usage", "pitch_usage_percent", "percent_usage"])
+        # Confirmed real column (logged from live run): pitch_usage. Dropped the "pa"
+        # fallback -- "pa" exists on this endpoint as plate-appearances-against, NOT
+        # usage, so it would have grabbed the wrong column.
+        usage_c = find_col(df, ["pitch_usage", "pitch_percent", "usage"])
         if name_c and pitch_c and usage_c:
             for _, row in df.iterrows():
                 k = _norm_name(row.get(name_c))
