@@ -102,7 +102,15 @@ def league_rates(players):
 
 def batter_hit_rate_per_pa(h, pitcher_hand):
     """Platoon-adjusted hits-per-PA. Mirrors batterHitRatePerPA() in the JS.
-    Base = OBP-BB%; multiplied by split-AVG/season-AVG ratio (clamped +/-40%)."""
+    Base = OBP-BB%; multiplied by a split-AVG/season-AVG ratio (clamped +/-40%).
+
+    v5.2: the split average is now SHRUNK toward the season average based on how many
+    PA the split is built on (empirical-Bayes regression to the mean). Without this, a
+    40-PA vs-LHP sample hitting .310 was trusted as much as a 400-PA one, letting noise
+    swing the multiplier to its +40% cap and pushing bench players to the top of the
+    board. With SPLIT_PRIOR_PA=150 (a standard regression constant for platoon splits),
+    a 50-PA split is weighted ~25% split / ~75% season; a 300-PA split ~67% split. This
+    is the same shrinkage discipline the Python analytics stack already uses."""
     obp = _nv(h.get("obp"))
     bb_pct = _nv(h.get("bbPct"))
     if obp is None or bb_pct is None:
@@ -111,12 +119,21 @@ def batter_hit_rate_per_pa(h, pitcher_hand):
     season_avg = _nv(h.get("avg"))
     if pitcher_hand == "L":
         split_avg = _nv(h.get("vsLAvg"))
+        split_pa = _nv(h.get("vsLPa"))
     elif pitcher_hand == "R":
         split_avg = _nv(h.get("vsRAvg"))
+        split_pa = _nv(h.get("vsRPa"))
     else:
         split_avg = None
+        split_pa = None
     if split_avg is not None and season_avg is not None and season_avg > 0:
-        mult = clamp_range(split_avg / season_avg, 0.6, 1.4)
+        # Shrink split_avg toward season_avg. Weight = split_pa / (split_pa + prior).
+        # If split_pa is unknown, fall back to a conservative low weight so an unmeasured
+        # split can't dominate.
+        SPLIT_PRIOR_PA = 150
+        w = (split_pa / (split_pa + SPLIT_PRIOR_PA)) if split_pa is not None else 0.25
+        shrunk_split = w * split_avg + (1 - w) * season_avg
+        mult = clamp_range(shrunk_split / season_avg, 0.6, 1.4)
         return base * mult
     return base
 
