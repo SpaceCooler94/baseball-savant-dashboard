@@ -256,6 +256,11 @@ def fetch_savant_metrics():
         hh_c = col(ev, ["ev95percent", "hard_hit_percent", "hard_hit_rate"])
         ev_c = col(ev, ["avg_hit_speed", "exit_velocity_avg"])
         ss_c = col(ev, ["anglesweetspotpercent", "sweet_spot_percent"])
+        # Power detail -- confirmed columns from the live log: max_hit_speed (max EV),
+        # avg_hr_distance (avg HR distance ft), avg_hit_angle (avg launch angle).
+        maxev_c = col(ev, ["max_hit_speed", "max_exit_velocity"])
+        hrdist_c = col(ev, ["avg_hr_distance", "avg_distance"])
+        la_c = col(ev, ["avg_hit_angle", "launch_angle_avg"])
         # This endpoint has NO pull%. Batted-ball direction is only fbld (fly+line drive)
         # and gb (ground ball) as raw COUNTS -- so FB% can be derived as fbld/(fbld+gb),
         # but pull% simply isn't available here and stays null (honest gap).
@@ -271,6 +276,9 @@ def fetch_savant_metrics():
                 if hh_c: m["hardHitPct"] = nv(row.get(hh_c))
                 if ev_c: m["avgEV"] = nv(row.get(ev_c))
                 if ss_c: m["sweetSpotPct"] = nv(row.get(ss_c))
+                if maxev_c: m["maxEV"] = nv(row.get(maxev_c))
+                if hrdist_c: m["hrDistance"] = nv(row.get(hrdist_c))
+                if la_c: m["launchAngle"] = nv(row.get(la_c))
                 # Derive FB% from counts when both are present.
                 if fbld_c and gb_c:
                     fbld = nv(row.get(fbld_c)); gb = nv(row.get(gb_c))
@@ -295,6 +303,52 @@ def fetch_savant_metrics():
                 if xba_c: m["xBA"] = nv(row.get(xba_c))
                 if xslg_c: m["xSLG"] = nv(row.get(xslg_c))
                 if xwoba_c: m["xwOBA"] = nv(row.get(xwoba_c))
+    except Exception:
+        pass
+
+    # Batter performance vs each pitch type (covers "hitter vs pitch type" AND
+    # "whiff%/K% vs pitch types" in one fetch). Same arsenal schema as the pitcher
+    # version -- confirmed columns: pitch_name, ba, slg, woba, whiff_percent,
+    # k_percent, pitch_usage. Attached as m["vsPitch"] = list of per-pitch dicts,
+    # sorted by how often the batter sees that pitch. Best-effort / defensive.
+    try:
+        try:
+            from pybaseball import statcast_batter_pitch_arsenal as batter_arsenal
+        except Exception:
+            batter_arsenal = None
+        if batter_arsenal is not None:
+            bdf = batter_arsenal(YEAR, minPA=25)
+            try:
+                print("SAVANT batter-arsenal columns:", list(bdf.columns))
+            except Exception:
+                pass
+            bn = col(bdf, ["last_name, first_name", "player_name", "name"])
+            bp = col(bdf, ["pitch_name", "pitch_type", "pitch"])
+            bba = col(bdf, ["ba"]); bslg = col(bdf, ["slg"]); bwhiff = col(bdf, ["whiff_percent"])
+            bk = col(bdf, ["k_percent"]); busage = col(bdf, ["pitch_usage", "pa"])
+            if bn and bp:
+                for _, row in bdf.iterrows():
+                    k = _norm_name(row.get(bn))
+                    if not k:
+                        continue
+                    pitch = str(row.get(bp) or "").strip()
+                    if not pitch:
+                        continue
+                    entry = {"pitch": pitch}
+                    if bba: entry["ba"] = nv(row.get(bba))
+                    if bslg: entry["slg"] = nv(row.get(bslg))
+                    if bwhiff: entry["whiff"] = nv(row.get(bwhiff))
+                    if bk: entry["k"] = nv(row.get(bk))
+                    if busage: entry["seen"] = nv(row.get(busage))
+                    m = metrics.setdefault(k, {})
+                    m.setdefault("vsPitch", []).append(entry)
+            # Keep the top pitches each batter sees most (up to 5), drop the rest.
+            for k in metrics:
+                vp = metrics[k].get("vsPitch")
+                if vp:
+                    metrics[k]["vsPitch"] = sorted(
+                        vp, key=lambda x: (x.get("seen") or 0), reverse=True
+                    )[:5]
     except Exception:
         pass
 
@@ -334,6 +388,9 @@ def fetch_pitcher_pitch_mix():
         # fallback -- "pa" exists on this endpoint as plate-appearances-against, NOT
         # usage, so it would have grabbed the wrong column.
         usage_c = find_col(df, ["pitch_usage", "pitch_percent", "usage"])
+        # Also capture results ALLOWED on each pitch -- confirmed columns: ba, slg, woba.
+        # Shows which of the SP's pitches get hit (e.g. "his slider allows .310").
+        ba_c = find_col(df, ["ba"]); slg_c = find_col(df, ["slg"]); woba_c = find_col(df, ["woba"])
         if name_c and pitch_c and usage_c:
             for _, row in df.iterrows():
                 k = _norm_name(row.get(name_c))
@@ -343,7 +400,11 @@ def fetch_pitcher_pitch_mix():
                 usage = nv(row.get(usage_c))
                 if not pitch or usage is None:
                     continue
-                mix.setdefault(k, []).append({"pitch": pitch, "usage": usage})
+                entry = {"pitch": pitch, "usage": usage}
+                if ba_c: entry["ba"] = nv(row.get(ba_c))
+                if slg_c: entry["slg"] = nv(row.get(slg_c))
+                if woba_c: entry["woba"] = nv(row.get(woba_c))
+                mix.setdefault(k, []).append(entry)
         # Keep each pitcher's top pitches by usage, capped at 5 for display.
         for k in mix:
             mix[k] = sorted(mix[k], key=lambda x: x["usage"], reverse=True)[:5]
@@ -487,6 +548,10 @@ def build_board():
                         "xSLG": (h.get("_savant") or {}).get("xSLG"),
                         "xwOBA": (h.get("_savant") or {}).get("xwOBA"),
                         "sweetSpotPct": (h.get("_savant") or {}).get("sweetSpotPct"),
+                        "maxEV": (h.get("_savant") or {}).get("maxEV"),
+                        "hrDistance": (h.get("_savant") or {}).get("hrDistance"),
+                        "launchAngle": (h.get("_savant") or {}).get("launchAngle"),
+                        "vsPitch": (h.get("_savant") or {}).get("vsPitch"),
                     },
                 })
             out.sort(key=lambda x: x["viewScore"], reverse=True)
@@ -504,8 +569,8 @@ def build_board():
             "weather": {},
             "homeTeam": {"name": home.get("name"), "abbr": home_abbr},
             "awayTeam": {"name": away.get("name"), "abbr": away_abbr},
-            "homeProbable": {"name": hp["name"], "hand": hp.get("hand"), "whip": hp.get("whip"), "hrPer9": hp.get("hrPer9")} if hp else None,
-            "awayProbable": {"name": ap["name"], "hand": ap.get("hand"), "whip": ap.get("whip"), "hrPer9": ap.get("hrPer9")} if ap else None,
+            "homeProbable": {"name": hp["name"], "hand": hp.get("hand"), "whip": hp.get("whip"), "hrPer9": hp.get("hrPer9"), "pitchMix": hp.get("pitchMix")} if hp else None,
+            "awayProbable": {"name": ap["name"], "hand": ap.get("hand"), "whip": ap.get("whip"), "hrPer9": ap.get("hrPer9"), "pitchMix": ap.get("pitchMix")} if ap else None,
             "homeMatchups": home_hitters,
             "awayMatchups": away_hitters,
             "topHitTargets": sorted(all_h, key=lambda x: x["hitProb"], reverse=True)[:8],
