@@ -161,6 +161,8 @@ def build_batter_pool():
             # fails, we keep the hitter with null splits (model falls back to season rate,
             # flagged partial) rather than dropping them.
             vs_l_avg, vs_r_avg = None, None
+            vs_l_avg, vs_r_avg = None, None
+            vs_l_pa, vs_r_pa = None, None
             try:
                 sp = http_json(
                     f"{STATS_API}/people/{pid}/stats?stats=statSplits&group=hitting"
@@ -171,8 +173,10 @@ def build_batter_pool():
                     sst = s.get("stat", {})
                     if code == "vl":
                         vs_l_avg = nv(sst.get("avg"))
+                        vs_l_pa = nv(sst.get("plateAppearances"))
                     elif code == "vr":
                         vs_r_avg = nv(sst.get("avg"))
+                        vs_r_pa = nv(sst.get("plateAppearances"))
             except Exception:
                 pass
             pool.append({
@@ -193,6 +197,8 @@ def build_batter_pool():
                 "babip": nv(st.get("babip")),
                 "vsLAvg": vs_l_avg,
                 "vsRAvg": vs_r_avg,
+                "vsLPa": vs_l_pa,
+                "vsRPa": vs_r_pa,
                 # Recent-form OPS still null in this version -- would need gameLog per
                 # hitter (another call each). Model treats null recent-form safely.
                 "l5Ops": None, "l10Ops": None,
