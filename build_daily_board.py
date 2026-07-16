@@ -1,6 +1,21 @@
 #!/usr/bin/env python3
 # ============================================================================
-# build_daily_board.py -- Part 2 of the model port (the data layer). REFACTORED.
+# build_daily_board.py -- Part 2 of the model port (the data layer). v2.1
+#
+# v2.1 (pairs with mlb_model v5.3, board schema 5.3):
+#   - RANKING: viewScore is now a z-score blend (zHit + zHr over the whole
+#     day's pool) instead of raw hitProb + hrProb. The raw sum was dominated
+#     ~4:1 by the hit component; z-scoring puts both markets on equal footing
+#     so "Overall" actually balances hit and HR standing.
+#   - ARSENAL FIT: pitchFitBA = usage-weighted batter BA against the specific
+#     SP's pitch mix (batter vsPitch x pitcher pitchMix, both already fetched).
+#     Reference metric + sortable column -- NOT in the log5 projection.
+#   - ANGLES: deterministic betting-angle flags per hitter (xBA regression gap,
+#     barrel-vs-HR-rate power due, K-matchup trap/BIP, arsenal fit extremes).
+#   - CONFIDENCE: high/med/low from batter PA + pitcher BF + data quality.
+#   - Pitcher K% added to probables (SO/BF, same stat block, zero extra calls).
+#   - topHitTargets/topHrTargets/topOverall REMOVED from the payload: no client
+#     ever read them and they tripled the JSON with duplicate player objects.
 #
 # Runs OFF the phone (on GitHub Actions). Pulls StatsAPI hitter/pitcher data +
 # Savant metrics, feeds them into the parity-locked math in mlb_model.py, and
@@ -62,7 +77,8 @@ USER_AGENT = "mlb-daily-board/1.0 (personal analytics pipeline)"
 MIN_PA = 25                 # pool floor, matches the model's MIN_PA
 SPLIT_SIT_CODES = "vl,vr"
 CAL_MODEL_VERSION = "log5-v5.0"   # calibration gate -- bump alongside the JS
-BOARD_SCHEMA_VERSION = 5.1
+BOARD_SCHEMA_VERSION = 5.3
+LEAGUE_K_PER_BF_PCT = 22.0   # rough league K%/BF baseline for angle thresholds
 
 # Publish gates: don't overwrite a good served board with a hollow one.
 MIN_GAMES_TO_PUBLISH = 1
@@ -548,6 +564,7 @@ def get_pitcher_rates(pid):
             obp = nv(st.get("obp"))
             bb = nv(st.get("baseOnBalls"))
             hr = nv(st.get("homeRuns"))
+            so = nv(st.get("strikeOuts"))
             bb_frac = (bb / bf) if bb is not None else None
             hit_rate_allowed = (
                 max(0.01, obp - bb_frac)
@@ -558,6 +575,7 @@ def get_pitcher_rates(pid):
                 "hitRateAllowedPerPA": hit_rate_allowed,
                 "hrRateAllowedPerPA": (hr / bf) if hr is not None else None,
                 "battersFaced": bf,
+                "kPct": (so / bf * 100) if so is not None else None,
                 "whip": nv(st.get("whip")),
                 "hrPer9": nv(st.get("homeRunsPer9")),
             }
@@ -598,13 +616,89 @@ def load_calibration():
     return None
 
 
+def pitch_fit(vs_pitch, pitch_mix):
+    """Usage-weighted batter BA against THIS starter's actual arsenal.
+    Matches batter vsPitch entries to the SP's pitchMix by pitch name and
+    weights the batter's BA-vs-pitch by how often the SP throws it. Returns
+    (fitBA, coveragePct) or (None, None) when the overlap covers <40% of the
+    SP's usage -- a fit built on a sliver of the arsenal is noise.
+    REFERENCE metric: displayed and sortable, never fed into log5."""
+    if not vs_pitch or not pitch_mix:
+        return None, None
+    by_pitch = {}
+    for e in vs_pitch:
+        name = str(e.get("pitch") or "").strip().lower()
+        if name:
+            by_pitch[name] = e
+    covered = 0.0
+    weighted = 0.0
+    for pm in pitch_mix:
+        usage = nv(pm.get("usage"))
+        if usage is None or usage <= 0:
+            continue
+        e = by_pitch.get(str(pm.get("pitch") or "").strip().lower())
+        ba = nv(e.get("ba")) if e else None
+        if ba is not None:
+            covered += usage
+            weighted += usage * ba
+    if covered < 40:
+        return None, None
+    return round(weighted / covered, 3), round(covered, 1)
+
+
+def compute_angles(row, opp):
+    """Deterministic betting-angle flags. Each one is auditable from fields
+    already on the row -- no black-box scoring. These do NOT move the model's
+    probabilities; they exist to separate 'model likes it' from 'underlying
+    quality agrees / disagrees'."""
+    angles = []
+    m = row.get("metrics") or {}
+    xba, avg = m.get("xBA"), m.get("avg")
+    if xba is not None and avg is not None:
+        gap = xba - avg
+        if gap >= 0.020:
+            angles.append({"label": "xBA %+d pts vs AVG, positive regression due" % round(gap * 1000), "cls": "green"})
+        elif gap <= -0.020:
+            angles.append({"label": "Overperforming xBA by %d pts" % round(-gap * 1000), "cls": "orange"})
+    barrel, hr_rate = m.get("barrelPct"), m.get("hrRate")
+    if barrel is not None and hr_rate is not None and barrel >= 12 and hr_rate <= 3.5:
+        angles.append({"label": "Barrel rate outruns HR rate, power due", "cls": "green"})
+    hk = m.get("kPct")
+    pk = opp.get("kPct") if opp else None
+    if hk is not None and pk is not None:
+        if pk >= LEAGUE_K_PER_BF_PCT + 5 and hk >= 27:
+            angles.append({"label": "Strikeout trap: high-K bat vs high-K arm", "cls": "red"})
+        elif pk <= LEAGUE_K_PER_BF_PCT - 4 and hk <= 18:
+            angles.append({"label": "Ball-in-play matchup: low-K bat vs low-K arm", "cls": "green"})
+    fit = row.get("pitchFitBA")
+    if fit is not None:
+        if fit >= 0.300:
+            angles.append({"label": "Hits this arsenal (.%03d fit)" % round(fit * 1000), "cls": "green"})
+        elif fit <= 0.200:
+            angles.append({"label": "Struggles vs this arsenal (.%03d fit)" % round(fit * 1000), "cls": "orange"})
+    return angles
+
+
+def confidence(pa, bf, hit_q, hr_q):
+    """Sample-depth grade for the whole matchup row."""
+    pa = pa or 0
+    bf = bf or 0
+    if hit_q == "full" and hr_q == "full" and pa >= 300 and bf >= 200:
+        return "high"
+    if pa >= 150 and bf >= 100 and "thin" not in (hit_q, hr_q):
+        return "med"
+    return "low"
+
+
 def project_side(hitters, opp_pitcher, ctx, league, calibration):
     out = []
     for h in hitters:
         hit = M.project_hit(h, opp_pitcher, ctx, league, calibration)
         hr = M.project_hr(h, opp_pitcher, ctx, league, calibration)
         sm = h.get("_savant") or {}
-        out.append({
+        fit_ba, fit_cov = pitch_fit(sm.get("vsPitch"),
+                                    (opp_pitcher or {}).get("pitchMix"))
+        row = {
             "hitterId": h["id"], "name": h["name"], "pos": h["pos"],
             "teamAbbr": h["teamAbbr"], "batSide": h.get("batSide"),
             "hitProb": hit["perGame"], "hitProbPerPA": hit["perPA"], "hitTier": hit["tier"],
@@ -615,8 +709,14 @@ def project_side(hitters, opp_pitcher, ctx, league, calibration):
             "hrInputs": hr["inputs"],
             "expectedPA": hit["expectedPA"], "batOrderAvg": h.get("orderAvg"),
             "lineupUnconfirmed": True,
-            "viewScore": (hit["perGame"] + hr["perGame"]),
+            "pitchFitBA": fit_ba,
+            "pitchFitCoverage": fit_cov,
+            "confidence": confidence(h.get("pa"),
+                                     (opp_pitcher or {}).get("battersFaced"),
+                                     hit["dataQuality"], hr["dataQuality"]),
+            "viewScore": 0,  # provisional -- z-scored across the whole slate below
             "metrics": {
+                "pa": h.get("pa"),
                 "avg": h.get("avg"), "obp": h.get("obp"), "hr": h.get("hr"),
                 "hrRate": h.get("hrRate"),
                 "kPct": h.get("kPct"), "babip": h.get("babip"),
@@ -634,9 +734,31 @@ def project_side(hitters, opp_pitcher, ctx, league, calibration):
                 "launchAngle": sm.get("launchAngle"),
                 "vsPitch": sm.get("vsPitch"),
             },
-        })
-    out.sort(key=lambda x: x["viewScore"], reverse=True)
+        }
+        row["angles"] = compute_angles(row, opp_pitcher)
+        out.append(row)
     return out
+
+
+def apply_view_scores(all_rows):
+    """z-score blend over the whole slate: viewScore = zHit + zHr. Puts the
+    hit and HR markets on equal footing (raw hitProb+hrProb let the hit term
+    dominate ~4:1). Deterministic and recomputable from hitProb/hrProb."""
+    def zs(vals):
+        n = len(vals)
+        if n < 2:
+            return [0.0] * n
+        mean = sum(vals) / n
+        var = sum((v - mean) ** 2 for v in vals) / n
+        sd = math.sqrt(var)
+        if sd < 1e-9:
+            return [0.0] * n
+        return [(v - mean) / sd for v in vals]
+
+    z_hit = zs([r["hitProb"] for r in all_rows])
+    z_hr = zs([r["hrProb"] for r in all_rows])
+    for r, zh, zr in zip(all_rows, z_hit, z_hr):
+        r["viewScore"] = round(zh + zr, 3)
 
 
 def build_board():
@@ -679,8 +801,17 @@ def build_board():
 
         home_hitters = project_side(by_team.get(home_abbr, []), ap, ctx, league, calibration)
         away_hitters = project_side(by_team.get(away_abbr, []), hp, ctx, league, calibration)
-        all_h = home_hitters + away_hitters
 
+        def slim_probable(pd):
+            if not pd:
+                return None
+            return {"name": pd["name"], "hand": pd.get("hand"), "whip": pd.get("whip"),
+                    "hrPer9": pd.get("hrPer9"), "kPct": pd.get("kPct"),
+                    "pitchMix": pd.get("pitchMix")}
+
+        # topHitTargets/topHrTargets/topOverall are gone: no client read them
+        # and they tripled the payload with duplicate player objects. Clients
+        # sort home/awayMatchups themselves.
         merged.append({
             "gameId": g.get("gamePk"),
             "gameTime": g.get("gameDate"),
@@ -689,18 +820,21 @@ def build_board():
             "weather": {},
             "homeTeam": {"name": home.get("name"), "abbr": home_abbr},
             "awayTeam": {"name": away.get("name"), "abbr": away_abbr},
-            "homeProbable": ({"name": hp["name"], "hand": hp.get("hand"), "whip": hp.get("whip"),
-                              "hrPer9": hp.get("hrPer9"), "pitchMix": hp.get("pitchMix")}
-                             if hp else None),
-            "awayProbable": ({"name": ap["name"], "hand": ap.get("hand"), "whip": ap.get("whip"),
-                              "hrPer9": ap.get("hrPer9"), "pitchMix": ap.get("pitchMix")}
-                             if ap else None),
+            "homeProbable": slim_probable(hp),
+            "awayProbable": slim_probable(ap),
             "homeMatchups": home_hitters,
             "awayMatchups": away_hitters,
-            "topHitTargets": sorted(all_h, key=lambda x: x["hitProb"], reverse=True)[:8],
-            "topHrTargets": sorted(all_h, key=lambda x: x["hrProb"], reverse=True)[:8],
-            "topOverall": sorted(all_h, key=lambda x: x["viewScore"], reverse=True)[:8],
         })
+
+    # Second pass: z-score viewScore across the WHOLE slate, then sort each side.
+    all_rows = []
+    for gm in merged:
+        all_rows.extend(gm["homeMatchups"])
+        all_rows.extend(gm["awayMatchups"])
+    apply_view_scores(all_rows)
+    for gm in merged:
+        gm["homeMatchups"].sort(key=lambda x: x["viewScore"], reverse=True)
+        gm["awayMatchups"].sort(key=lambda x: x["viewScore"], reverse=True)
 
     return {
         "schemaVersion": BOARD_SCHEMA_VERSION,
