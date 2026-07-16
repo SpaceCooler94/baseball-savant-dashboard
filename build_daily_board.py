@@ -1,38 +1,79 @@
 #!/usr/bin/env python3
 # ============================================================================
-# build_daily_board.py -- Part 2 of the model port (the data layer).
+# build_daily_board.py -- Part 2 of the model port (the data layer). REFACTORED.
 #
-# Runs OFF the phone (on GitHub Actions). Pulls Savant hitter data + today's
-# schedule/probable pitchers + pitcher rate stats, feeds them into the proven
-# math in mlb_model.py, and writes daily_board.json in the exact shape
-# MLB_Daily.js renders. Render serves that file; the phone just displays it.
+# Runs OFF the phone (on GitHub Actions). Pulls StatsAPI hitter/pitcher data +
+# Savant metrics, feeds them into the parity-locked math in mlb_model.py, and
+# writes daily_board.json in the exact shape MLB_Daily.js renders.
 #
-# HONESTY NOTE: unlike mlb_model.py (which I could prove identical to the JS in a
-# sandbox), this file hits LIVE data sources. I can build it, guard it, and
-# dry-run its shape, but its real data output must be confirmed by an actual run
-# (locally or in the GitHub Action). Savant column names in particular drift
-# between library versions -- every column access here goes through find_col with
-# multiple candidate names so a rename degrades gracefully instead of KeyError-ing.
+# CHANGES FROM v1 (production-review fixes):
+#   1. TIMEZONE: all "today"/season logic pinned to America/New_York. GitHub
+#      Actions runs UTC -- the old datetime.now() built TOMORROW's board any
+#      time the Action fired after ~8pm ET.
+#   2. CALL VOLUME: hitter pool now tries ONE hydrated roster call per team
+#      (season stats + vl/vr splits inline) = ~30 requests instead of ~800.
+#      Falls back to the proven per-player path (bounded thread pool) if the
+#      hydrate shape isn't what we expect. Hydrate path must be confirmed on
+#      the first live run -- same honesty rule as before.
+#   3. CRASH SAFETY: the pitcher handedness lookup was UNGUARDED -- one failed
+#      /people/{id} call after retries killed the entire build. Pitcher stats
+#      + hand now come from one guarded hydrated call, cached per pid.
+#   4. ATOMIC PUBLISH: board is written to a temp file and os.replace()d into
+#      place. The old direct json.dump could leave Render serving truncated
+#      JSON if the process died mid-write.
+#   5. PUBLISH GATES: refuses to overwrite a good board with a degraded one
+#      (min games / min pool thresholds) -- exits 1 so the Action keeps
+#      yesterday's file instead of shipping a hollow board.
+#   6. OBSERVABLE DEGRADATION: bare `except: pass` blocks replaced with a
+#      health counter surfaced in board metadata (dataHealth) and stdout.
+#      Additive key -- the thin client ignores unknown fields.
+#   7. HTTP: shared Session, backoff with jitter, 429/5xx-aware retries.
 #
-# Reuses the helper patterns from the repo's app.py (find_col / rename_if_exists /
-# df_to_records) so behavior is consistent with the dashboard already in production.
+# mlb_model.py is deliberately NOT touched: it is parity-locked to the JS and
+# any "cleanup" there invalidates the parity test. All input hardening happens
+# here, at the boundary.
 # ============================================================================
 
 import datetime
 import json
 import math
+import os
+import random
 import sys
+import tempfile
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from zoneinfo import ZoneInfo
 
 import requests
 
 import mlb_model as M
 
+# ------------------------------ configuration -------------------------------
 
-YEAR = datetime.datetime.now().year
+ET = ZoneInfo("America/New_York")
+NOW_ET = datetime.datetime.now(ET)
+TODAY = NOW_ET.strftime("%Y-%m-%d")
+YEAR = NOW_ET.year
+
 STATS_API = "https://statsapi.mlb.com/api/v1"
+USER_AGENT = "mlb-daily-board/1.0 (personal analytics pipeline)"
 
-# Park factors + stadium coords, ported verbatim from Daily_Matchups.js constants.
+MIN_PA = 25                 # pool floor, matches the model's MIN_PA
+SPLIT_SIT_CODES = "vl,vr"
+CAL_MODEL_VERSION = "log5-v5.0"   # calibration gate -- bump alongside the JS
+BOARD_SCHEMA_VERSION = 5.1
+
+# Publish gates: don't overwrite a good served board with a hollow one.
+MIN_GAMES_TO_PUBLISH = 1
+MIN_POOL_TO_PUBLISH = 100   # a normal slate yields ~300-400 qualified hitters
+
+MAX_WORKERS = 6             # bounded concurrency for the per-player fallback
+OUTPUT_PATH = "daily_board.json"
+
+# Park factors + team maps, ported verbatim from Daily_Matchups.js constants.
+# NOTE (data, not code): OAK=116 reflects Sutter Health Park (Sacramento) --
+# revisit each season alongside the rest of this table.
 PARK_FACTORS = {
     "COL": 122, "CIN": 108, "BOS": 108, "PHI": 107, "NYY": 106, "TEX": 105,
     "HOU": 104, "ATL": 104, "MIL": 103, "ARI": 103, "WSH": 102, "CHC": 102,
@@ -41,7 +82,6 @@ PARK_FACTORS = {
     "KCR": 97, "TBR": 97, "LAA": 97, "OAK": 116, "SDP": 94, "SFG": 93,
 }
 
-# Full team-abbreviation normalization, ported from the JS TEAM_MAP.
 TEAM_MAP = {
     "AZ": "ARI", "ARI": "ARI", "ATL": "ATL", "BAL": "BAL", "BOS": "BOS",
     "CHC": "CHC", "CWS": "CHW", "CHW": "CHW", "CIN": "CIN", "CLE": "CLE",
@@ -53,7 +93,6 @@ TEAM_MAP = {
     "TOR": "TOR", "WSH": "WSH", "WSN": "WSH",
 }
 
-# StatsAPI returns full team names; map those to our abbreviations.
 TEAM_NAME_TO_ABBR = {
     "Arizona Diamondbacks": "ARI", "Atlanta Braves": "ATL", "Baltimore Orioles": "BAL",
     "Boston Red Sox": "BOS", "Chicago Cubs": "CHC", "Chicago White Sox": "CHW",
@@ -68,20 +107,52 @@ TEAM_NAME_TO_ABBR = {
     "Washington Nationals": "WSH",
 }
 
+# --------------------------- health / degradation ---------------------------
 
-def norm_team(abbr):
-    if not abbr:
-        return None
-    return TEAM_MAP.get(str(abbr).upper(), str(abbr).upper())
+HEALTH = {
+    "hydratedRosterPath": False,   # did the fast path work?
+    "hitterStatMisses": 0,         # hitters skipped for missing season stats
+    "splitMisses": 0,              # hitters kept but with null platoon splits
+    "pitcherMisses": 0,            # probables we couldn't rate
+    "savantExitVeloOk": False,
+    "savantExpectedOk": False,
+    "savantBatterArsenalOk": False,
+    "savantPitcherArsenalOk": False,
+    "warnings": [],
+}
 
 
-# ---- helper functions mirrored from app.py so behavior matches the dashboard ----
+def warn(msg):
+    """Loud, bounded warning: printed for the Action log AND kept in board meta."""
+    print(f"WARN: {msg}", file=sys.stderr)
+    if len(HEALTH["warnings"]) < 25:
+        HEALTH["warnings"].append(msg)
 
-def find_col(df, candidates):
-    for c in candidates:
-        if c in df.columns:
-            return c
-    return None
+
+# ------------------------------- HTTP layer ---------------------------------
+
+SESSION = requests.Session()
+SESSION.headers.update({"User-Agent": USER_AGENT})
+
+
+def http_json(url, tries=3, timeout=15):
+    """GET JSON with exponential backoff + jitter. Honors Retry-After on 429."""
+    last = None
+    for attempt in range(tries):
+        try:
+            r = SESSION.get(url, timeout=timeout)
+            if r.status_code == 429:
+                wait = float(r.headers.get("Retry-After", 5))
+                time.sleep(min(wait, 30))
+                last = requests.HTTPError("429 Too Many Requests")
+                continue
+            r.raise_for_status()
+            return r.json()
+        except Exception as e:
+            last = e
+            if attempt < tries - 1:
+                time.sleep((2 ** attempt) + random.uniform(0, 0.5))
+    raise last
 
 
 def nv(v):
@@ -95,119 +166,12 @@ def nv(v):
         return None
 
 
-def http_json(url, tries=2):
-    """GET with one retry -- mirrors the pacing/retry discipline from the JS side."""
-    last = None
-    for attempt in range(tries):
-        try:
-            r = requests.get(url, timeout=15, headers={"User-Agent": "Mozilla/5.0"})
-            r.raise_for_status()
-            return r.json()
-        except Exception as e:
-            last = e
-            if attempt < tries - 1:
-                time.sleep(2)
-    raise last
+def find_col(df, candidates):
+    for c in candidates:
+        if c in df.columns:
+            return c
+    return None
 
-
-# --------------------------- batter data (Savant) ---------------------------
-
-def build_batter_pool():
-    """Pull the full qualified-hitter pool and shape it into the record format
-    mlb_model expects (obp/bbPct/hrRate/avg/vsLAvg/vsRAvg/etc).
-
-    Batter base = StatsAPI season hitting stats (obp/avg/hr/pa/bb) plus vl/vr platoon
-    splits (which feed the model's hit projection). Savant advanced metrics (barrel%,
-    xBA, xSLG, etc.) are merged on top via merge_savant_metrics() for the detail view.
-
-    Still null in this version: recent-form OPS (l5/l10, would need per-hitter gameLog)
-    and lineup slot (unknown until lineups post). The model handles both as null safely.
-    """
-    # StatsAPI season hitting leaders -- gives obp, avg, hr, pa, bb, so, per team roster.
-    # We pull by team so we also get team affiliation for the schedule join.
-    teams = http_json(f"{STATS_API}/teams?sportId=1&season={YEAR}").get("teams", [])
-    pool = []
-    for t in teams:
-        tid = t.get("id")
-        tabbr = norm_team(t.get("abbreviation"))
-        if not tid:
-            continue
-        try:
-            roster = http_json(f"{STATS_API}/teams/{tid}/roster?rosterType=active&season={YEAR}")
-        except Exception:
-            continue
-        for entry in roster.get("roster", []):
-            person = entry.get("person", {})
-            pid = person.get("id")
-            pos = entry.get("position", {}).get("abbreviation")
-            if not pid or pos == "P":  # skip pitchers for the hitter pool
-                continue
-            try:
-                stats = http_json(
-                    f"{STATS_API}/people/{pid}/stats?stats=season&group=hitting&season={YEAR}"
-                )
-            except Exception:
-                continue
-            splits = (stats.get("stats") or [{}])[0].get("splits") or []
-            if not splits:
-                continue
-            st = splits[0].get("stat", {})
-            pa = nv(st.get("plateAppearances"))
-            if pa is None or pa < 25:  # same MIN_PA floor as the model's pool
-                continue
-            # Platoon splits: one extra call, but fetched via statSplits with vl,vr in a
-            # single request (mirrors the old Rankings.js approach). vsLAvg/vsRAvg feed
-            # directly into the model's hit projection. Best-effort -- if the split call
-            # fails, we keep the hitter with null splits (model falls back to season rate,
-            # flagged partial) rather than dropping them.
-            vs_l_avg, vs_r_avg = None, None
-            vs_l_avg, vs_r_avg = None, None
-            vs_l_pa, vs_r_pa = None, None
-            try:
-                sp = http_json(
-                    f"{STATS_API}/people/{pid}/stats?stats=statSplits&group=hitting"
-                    f"&season={YEAR}&sitCodes=vl,vr"
-                )
-                for s in (sp.get("stats") or [{}])[0].get("splits") or []:
-                    code = str((s.get("split") or {}).get("code") or "").lower()
-                    sst = s.get("stat", {})
-                    if code == "vl":
-                        vs_l_avg = nv(sst.get("avg"))
-                        vs_l_pa = nv(sst.get("plateAppearances"))
-                    elif code == "vr":
-                        vs_r_avg = nv(sst.get("avg"))
-                        vs_r_pa = nv(sst.get("plateAppearances"))
-            except Exception:
-                pass
-            pool.append({
-                "id": pid,
-                "name": person.get("fullName"),
-                "teamAbbr": tabbr,
-                "pos": pos,
-                "batSide": (person.get("batSide") or {}).get("code"),
-                "pa": pa,
-                "obp": nv(st.get("obp")),
-                "avg": nv(st.get("avg")),
-                "bbPct": (nv(st.get("baseOnBalls")) / pa * 100) if (nv(st.get("baseOnBalls")) is not None and pa) else None,
-                "hr": nv(st.get("homeRuns")),
-                "hrRate": (nv(st.get("homeRuns")) / pa * 100) if (nv(st.get("homeRuns")) is not None and pa) else None,
-                # K% and BABIP come straight from the same season stat block (real data,
-                # not estimated). K% = strikeOuts/PA; BABIP StatsAPI provides directly.
-                "kPct": (nv(st.get("strikeOuts")) / pa * 100) if (nv(st.get("strikeOuts")) is not None and pa) else None,
-                "babip": nv(st.get("babip")),
-                "vsLAvg": vs_l_avg,
-                "vsRAvg": vs_r_avg,
-                "vsLPa": vs_l_pa,
-                "vsRPa": vs_r_pa,
-                # Recent-form OPS still null in this version -- would need gameLog per
-                # hitter (another call each). Model treats null recent-form safely.
-                "l5Ops": None, "l10Ops": None,
-                "orderAvg": None,  # lineup slot not known until lineups post; null -> model uses whole-lineup PA
-            })
-    return pool
-
-
-# --------------------------- Savant metrics (bulk) --------------------------
 
 def _norm_name(name):
     """Normalize a player name for joining Savant ('Last, First') to StatsAPI
@@ -222,50 +186,204 @@ def _norm_name(name):
     return " ".join(n.lower().split())
 
 
+def norm_team(abbr):
+    if not abbr:
+        return None
+    return TEAM_MAP.get(str(abbr).upper(), str(abbr).upper())
+
+
+# --------------------------- batter data (StatsAPI) --------------------------
+
+def _hitter_record(pid, name, tabbr, pos, bat_side, season_stat,
+                   vs_l_avg=None, vs_r_avg=None, vs_l_pa=None, vs_r_pa=None):
+    """Shape one hitter into the record format mlb_model expects.
+    Returns None if the hitter doesn't meet the pool floor."""
+    st = season_stat or {}
+    pa = nv(st.get("plateAppearances"))
+    if pa is None or pa < MIN_PA:
+        return None
+    bb = nv(st.get("baseOnBalls"))
+    hr = nv(st.get("homeRuns"))
+    so = nv(st.get("strikeOuts"))
+    return {
+        "id": pid,
+        "name": name,
+        "teamAbbr": tabbr,
+        "pos": pos,
+        "batSide": bat_side,
+        "pa": pa,
+        "obp": nv(st.get("obp")),
+        "avg": nv(st.get("avg")),
+        "bbPct": (bb / pa * 100) if bb is not None else None,
+        "hr": hr,
+        "hrRate": (hr / pa * 100) if hr is not None else None,
+        "kPct": (so / pa * 100) if so is not None else None,
+        "babip": nv(st.get("babip")),
+        "vsLAvg": vs_l_avg,
+        "vsRAvg": vs_r_avg,
+        "vsLPa": vs_l_pa,
+        "vsRPa": vs_r_pa,
+        # Recent-form OPS still null (would need per-hitter gameLog).
+        "l5Ops": None, "l10Ops": None,
+        # Lineup slot unknown until lineups post; null -> whole-lineup PA.
+        "orderAvg": None,
+    }
+
+
+def _parse_person_stats(person):
+    """Pull (season_stat, vl/vr splits) out of a hydrated person.stats block.
+    Returns (season_stat_or_None, vsL_avg, vsR_avg, vsL_pa, vsR_pa)."""
+    season_stat = None
+    vs_l_avg = vs_r_avg = vs_l_pa = vs_r_pa = None
+    for block in person.get("stats") or []:
+        btype = ((block.get("type") or {}).get("displayName") or "").lower()
+        splits = block.get("splits") or []
+        if btype == "season" and splits:
+            season_stat = splits[0].get("stat", {})
+        elif btype == "statsplits":
+            for s in splits:
+                code = str((s.get("split") or {}).get("code") or "").lower()
+                sst = s.get("stat", {})
+                if code == "vl":
+                    vs_l_avg = nv(sst.get("avg"))
+                    vs_l_pa = nv(sst.get("plateAppearances"))
+                elif code == "vr":
+                    vs_r_avg = nv(sst.get("avg"))
+                    vs_r_pa = nv(sst.get("plateAppearances"))
+    return season_stat, vs_l_avg, vs_r_avg, vs_l_pa, vs_r_pa
+
+
+def _fetch_hitter_slow(pid, name, tabbr, pos, bat_side):
+    """Per-player fallback: season stats + vl/vr splits in ONE combined call
+    (the old version used two). Best-effort splits: a failed/missing split
+    block keeps the hitter with nulls rather than dropping them."""
+    try:
+        data = http_json(
+            f"{STATS_API}/people/{pid}/stats?stats=season,statSplits&group=hitting"
+            f"&season={YEAR}&sitCodes={SPLIT_SIT_CODES}"
+        )
+    except Exception as e:
+        HEALTH["hitterStatMisses"] += 1
+        warn(f"hitter stats failed pid={pid} ({type(e).__name__})")
+        return None
+    season_stat = None
+    vs_l_avg = vs_r_avg = vs_l_pa = vs_r_pa = None
+    for block in data.get("stats") or []:
+        btype = ((block.get("type") or {}).get("displayName") or "").lower()
+        splits = block.get("splits") or []
+        if btype == "season" and splits:
+            season_stat = splits[0].get("stat", {})
+        elif btype == "statsplits":
+            for s in splits:
+                code = str((s.get("split") or {}).get("code") or "").lower()
+                sst = s.get("stat", {})
+                if code == "vl":
+                    vs_l_avg = nv(sst.get("avg"))
+                    vs_l_pa = nv(sst.get("plateAppearances"))
+                elif code == "vr":
+                    vs_r_avg = nv(sst.get("avg"))
+                    vs_r_pa = nv(sst.get("plateAppearances"))
+    if season_stat is None:
+        return None
+    if vs_l_avg is None and vs_r_avg is None:
+        HEALTH["splitMisses"] += 1
+    return _hitter_record(pid, name, tabbr, pos, bat_side, season_stat,
+                          vs_l_avg, vs_r_avg, vs_l_pa, vs_r_pa)
+
+
+def build_batter_pool():
+    """FAST PATH: one hydrated roster call per team pulls season stats + vl/vr
+    splits inline (~30 requests total). If the hydrate shape isn't recognized
+    (StatsAPI hydrate grammar must be confirmed on the first live run), we fall
+    back to the combined per-player call, bounded-threaded (~400 requests, still
+    half the old version's ~800 and off the phone either way)."""
+    teams = http_json(f"{STATS_API}/teams?sportId=1&season={YEAR}").get("teams", [])
+    pool = []
+    slow_queue = []  # (pid, name, tabbr, pos, batSide) needing per-player fetch
+
+    hydrate = (
+        "person(stats(group=[hitting],type=[season,statSplits],"
+        f"sitCodes=[vl,vr],season={YEAR}))"
+    )
+    any_hydrated = False
+
+    for t in teams:
+        tid = t.get("id")
+        tabbr = norm_team(t.get("abbreviation"))
+        if not tid:
+            continue
+        try:
+            roster = http_json(
+                f"{STATS_API}/teams/{tid}/roster?rosterType=active&season={YEAR}"
+                f"&hydrate={hydrate}"
+            )
+        except Exception as e:
+            warn(f"roster fetch failed team={tabbr} ({type(e).__name__})")
+            continue
+        for entry in roster.get("roster", []):
+            person = entry.get("person", {})
+            pid = person.get("id")
+            pos = entry.get("position", {}).get("abbreviation")
+            if not pid or pos == "P":
+                continue
+            name = person.get("fullName")
+            bat_side = (person.get("batSide") or {}).get("code")
+            if person.get("stats"):
+                any_hydrated = True
+                season_stat, la, ra, lpa, rpa = _parse_person_stats(person)
+                if season_stat is None:
+                    continue
+                if la is None and ra is None:
+                    HEALTH["splitMisses"] += 1
+                rec = _hitter_record(pid, name, tabbr, pos, bat_side,
+                                     season_stat, la, ra, lpa, rpa)
+                if rec:
+                    pool.append(rec)
+            else:
+                slow_queue.append((pid, name, tabbr, pos, bat_side))
+
+    HEALTH["hydratedRosterPath"] = any_hydrated
+    if slow_queue:
+        if any_hydrated:
+            warn(f"{len(slow_queue)} hitters missing hydrated stats -> per-player fallback")
+        else:
+            warn("hydrated roster path returned no stats -- full per-player fallback")
+        with ThreadPoolExecutor(max_workers=MAX_WORKERS) as ex:
+            futures = [ex.submit(_fetch_hitter_slow, *args) for args in slow_queue]
+            for f in as_completed(futures):
+                rec = f.result()
+                if rec:
+                    pool.append(rec)
+    return pool
+
+
+# --------------------------- Savant metrics (bulk) --------------------------
+
 def fetch_savant_metrics():
-    """Pull barrel%, hard-hit%, xBA, xSLG, etc. in BULK (one pybaseball call each, not
-    per-player) and return a dict keyed by normalized name. Best-effort: any endpoint
-    that fails is skipped, and every column access goes through find_col so a Savant
-    rename degrades to null rather than crashing. Returns {} on total failure so the
-    board still builds on rate stats alone."""
+    """Bulk barrel%/xBA/etc keyed by normalized name. Best-effort per endpoint,
+    but every failure is now COUNTED and WARNED instead of silently swallowed.
+    Returns {} on total failure so the board still builds on rate stats."""
     metrics = {}
     try:
-        from pybaseball import statcast_batter_exitvelo_barrels, statcast_batter_expected_stats
-    except Exception:
+        from pybaseball import (statcast_batter_exitvelo_barrels,
+                                statcast_batter_expected_stats)
+    except Exception as e:
+        warn(f"pybaseball import failed ({type(e).__name__}) -- Savant metrics skipped")
         return metrics
 
-    def col(df, cands):
-        return find_col(df, cands)
-
-    # Exit velo / barrels (+ batted-ball direction if present on this endpoint)
+    # Exit velo / barrels (+ derived FB% from fbld/gb counts)
     try:
         ev = statcast_batter_exitvelo_barrels(YEAR, minBBE=25)
-        # pybaseball runs sanitize_statcast_columns() on this data, renaming the raw
-        # Savant headers -- which is why an earlier guess ("hard_hit_percent") missed
-        # even though barrel worked. Log the real columns ONCE so the Action output
-        # reveals the actual names; tighten candidates below if any stay null.
-        try:
-            print("SAVANT exitvelo columns:", list(ev.columns))
-        except Exception:
-            pass
-        name_c = col(ev, ["last_name, first_name", "player_name", "name"])
-        brl_c = col(ev, ["brl_percent", "barrel_batted_rate"])
-        # Confirmed real column names (logged from the live Action run):
-        # hard-hit% is ev95percent (share of balls hit 95+ mph); sweet-spot is
-        # anglesweetspotpercent; avg EV is avg_hit_speed.
-        hh_c = col(ev, ["ev95percent", "hard_hit_percent", "hard_hit_rate"])
-        ev_c = col(ev, ["avg_hit_speed", "exit_velocity_avg"])
-        ss_c = col(ev, ["anglesweetspotpercent", "sweet_spot_percent"])
-        # Power detail -- confirmed columns from the live log: max_hit_speed (max EV),
-        # avg_hr_distance (avg HR distance ft), avg_hit_angle (avg launch angle).
-        maxev_c = col(ev, ["max_hit_speed", "max_exit_velocity"])
-        hrdist_c = col(ev, ["avg_hr_distance", "avg_distance"])
-        la_c = col(ev, ["avg_hit_angle", "launch_angle_avg"])
-        # This endpoint has NO pull%. Batted-ball direction is only fbld (fly+line drive)
-        # and gb (ground ball) as raw COUNTS -- so FB% can be derived as fbld/(fbld+gb),
-        # but pull% simply isn't available here and stays null (honest gap).
-        fbld_c = col(ev, ["fbld"])
-        gb_c = col(ev, ["gb"])
+        name_c = find_col(ev, ["last_name, first_name", "player_name", "name"])
+        brl_c = find_col(ev, ["brl_percent", "barrel_batted_rate"])
+        hh_c = find_col(ev, ["ev95percent", "hard_hit_percent", "hard_hit_rate"])
+        ev_c = find_col(ev, ["avg_hit_speed", "exit_velocity_avg"])
+        ss_c = find_col(ev, ["anglesweetspotpercent", "sweet_spot_percent"])
+        maxev_c = find_col(ev, ["max_hit_speed", "max_exit_velocity"])
+        hrdist_c = find_col(ev, ["avg_hr_distance", "avg_distance"])
+        la_c = find_col(ev, ["avg_hit_angle", "launch_angle_avg"])
+        fbld_c = find_col(ev, ["fbld"])
+        gb_c = find_col(ev, ["gb"])
         if name_c:
             for _, row in ev.iterrows():
                 k = _norm_name(row.get(name_c))
@@ -279,21 +397,23 @@ def fetch_savant_metrics():
                 if maxev_c: m["maxEV"] = nv(row.get(maxev_c))
                 if hrdist_c: m["hrDistance"] = nv(row.get(hrdist_c))
                 if la_c: m["launchAngle"] = nv(row.get(la_c))
-                # Derive FB% from counts when both are present.
                 if fbld_c and gb_c:
                     fbld = nv(row.get(fbld_c)); gb = nv(row.get(gb_c))
                     if fbld is not None and gb is not None and (fbld + gb) > 0:
                         m["fbPct"] = round(fbld / (fbld + gb) * 100, 1)
-    except Exception:
-        pass
+            HEALTH["savantExitVeloOk"] = True
+        else:
+            warn(f"exitvelo: no name column recognized in {list(ev.columns)[:8]}...")
+    except Exception as e:
+        warn(f"exitvelo fetch failed ({type(e).__name__}: {e})")
 
     # Expected stats (xBA, xSLG, xwOBA)
     try:
         xs = statcast_batter_expected_stats(YEAR, minPA=25)
-        name_c = col(xs, ["last_name, first_name", "player_name", "name"])
-        xba_c = col(xs, ["est_ba", "xba", "expected_batting_avg"])
-        xslg_c = col(xs, ["est_slg", "xslg", "expected_slg"])
-        xwoba_c = col(xs, ["est_woba", "xwoba", "expected_woba"])
+        name_c = find_col(xs, ["last_name, first_name", "player_name", "name"])
+        xba_c = find_col(xs, ["est_ba", "xba", "expected_batting_avg"])
+        xslg_c = find_col(xs, ["est_slg", "xslg", "expected_slg"])
+        xwoba_c = find_col(xs, ["est_woba", "xwoba", "expected_woba"])
         if name_c:
             for _, row in xs.iterrows():
                 k = _norm_name(row.get(name_c))
@@ -303,29 +423,26 @@ def fetch_savant_metrics():
                 if xba_c: m["xBA"] = nv(row.get(xba_c))
                 if xslg_c: m["xSLG"] = nv(row.get(xslg_c))
                 if xwoba_c: m["xwOBA"] = nv(row.get(xwoba_c))
-    except Exception:
-        pass
+            HEALTH["savantExpectedOk"] = True
+        else:
+            warn("expected-stats: no name column recognized")
+    except Exception as e:
+        warn(f"expected-stats fetch failed ({type(e).__name__}: {e})")
 
-    # Batter performance vs each pitch type (covers "hitter vs pitch type" AND
-    # "whiff%/K% vs pitch types" in one fetch). Same arsenal schema as the pitcher
-    # version -- confirmed columns: pitch_name, ba, slg, woba, whiff_percent,
-    # k_percent, pitch_usage. Attached as m["vsPitch"] = list of per-pitch dicts,
-    # sorted by how often the batter sees that pitch. Best-effort / defensive.
+    # Batter vs pitch type (whiff/K/BA per pitch, top 5 by exposure)
     try:
+        batter_arsenal = None
         try:
             from pybaseball import statcast_batter_pitch_arsenal as batter_arsenal
         except Exception:
-            batter_arsenal = None
+            pass
         if batter_arsenal is not None:
             bdf = batter_arsenal(YEAR, minPA=25)
-            try:
-                print("SAVANT batter-arsenal columns:", list(bdf.columns))
-            except Exception:
-                pass
-            bn = col(bdf, ["last_name, first_name", "player_name", "name"])
-            bp = col(bdf, ["pitch_name", "pitch_type", "pitch"])
-            bba = col(bdf, ["ba"]); bslg = col(bdf, ["slg"]); bwhiff = col(bdf, ["whiff_percent"])
-            bk = col(bdf, ["k_percent"]); busage = col(bdf, ["pitch_usage", "pa"])
+            bn = find_col(bdf, ["last_name, first_name", "player_name", "name"])
+            bp = find_col(bdf, ["pitch_name", "pitch_type", "pitch"])
+            bba = find_col(bdf, ["ba"]); bslg = find_col(bdf, ["slg"])
+            bwhiff = find_col(bdf, ["whiff_percent"]); bk = find_col(bdf, ["k_percent"])
+            busage = find_col(bdf, ["pitch_usage", "pa"])
             if bn and bp:
                 for _, row in bdf.iterrows():
                     k = _norm_name(row.get(bn))
@@ -342,55 +459,39 @@ def fetch_savant_metrics():
                     if busage: entry["seen"] = nv(row.get(busage))
                     m = metrics.setdefault(k, {})
                     m.setdefault("vsPitch", []).append(entry)
-            # Keep the top pitches each batter sees most (up to 5), drop the rest.
-            for k in metrics:
-                vp = metrics[k].get("vsPitch")
-                if vp:
-                    metrics[k]["vsPitch"] = sorted(
-                        vp, key=lambda x: (x.get("seen") or 0), reverse=True
-                    )[:5]
-    except Exception:
-        pass
+                for k in metrics:
+                    vp = metrics[k].get("vsPitch")
+                    if vp:
+                        metrics[k]["vsPitch"] = sorted(
+                            vp, key=lambda x: (x.get("seen") or 0), reverse=True
+                        )[:5]
+                HEALTH["savantBatterArsenalOk"] = True
+    except Exception as e:
+        warn(f"batter-arsenal fetch failed ({type(e).__name__}: {e})")
 
     return metrics
 
 
-# --------------------------- schedule + pitchers ----------------------------
-
 def fetch_pitcher_pitch_mix():
-    """Bulk-pull starting pitchers' pitch usage (FB/SL/CH/CB %) from Savant, keyed by
-    normalized name. ONE call for the whole league, not per-pitcher. This is REFERENCE
-    data shown in the detail panel -- it does NOT feed the log5 projection (the model
-    is built on rate stats, not pitch-type matchups). Best-effort: any failure returns
-    {} and the pitch-mix row simply shows nothing. Columns accessed via find_col so a
-    Savant rename degrades to null rather than crashing."""
+    """Bulk pitch-usage + results-allowed per pitch, keyed by normalized name.
+    Reference data only -- does NOT feed the log5 projection."""
     mix = {}
     arsenal_fn = None
     try:
-        # Try the arsenal-stats function; fall back to the alternate name if the
-        # installed pybaseball version exposes it differently. 0 pitchers on the last
-        # run means one of these (or the columns) was off.
         try:
             from pybaseball import statcast_pitcher_arsenal_stats as arsenal_fn
         except Exception:
             from pybaseball import statcast_pitcher_pitch_arsenal as arsenal_fn
-    except Exception:
+    except Exception as e:
+        warn(f"pitcher-arsenal import failed ({type(e).__name__})")
         return mix
     try:
         df = arsenal_fn(YEAR, minPA=50)
-        try:
-            print("SAVANT arsenal columns:", list(df.columns))
-        except Exception:
-            pass
         name_c = find_col(df, ["last_name, first_name", "player_name", "name"])
         pitch_c = find_col(df, ["pitch_name", "pitch_type", "pitch"])
-        # Confirmed real column (logged from live run): pitch_usage. Dropped the "pa"
-        # fallback -- "pa" exists on this endpoint as plate-appearances-against, NOT
-        # usage, so it would have grabbed the wrong column.
         usage_c = find_col(df, ["pitch_usage", "pitch_percent", "usage"])
-        # Also capture results ALLOWED on each pitch -- confirmed columns: ba, slg, woba.
-        # Shows which of the SP's pitches get hit (e.g. "his slider allows .310").
-        ba_c = find_col(df, ["ba"]); slg_c = find_col(df, ["slg"]); woba_c = find_col(df, ["woba"])
+        ba_c = find_col(df, ["ba"]); slg_c = find_col(df, ["slg"])
+        woba_c = find_col(df, ["woba"])
         if name_c and pitch_c and usage_c:
             for _, row in df.iterrows():
                 k = _norm_name(row.get(name_c))
@@ -405,92 +506,148 @@ def fetch_pitcher_pitch_mix():
                 if slg_c: entry["slg"] = nv(row.get(slg_c))
                 if woba_c: entry["woba"] = nv(row.get(woba_c))
                 mix.setdefault(k, []).append(entry)
-        # Keep each pitcher's top pitches by usage, capped at 5 for display.
-        for k in mix:
-            mix[k] = sorted(mix[k], key=lambda x: x["usage"], reverse=True)[:5]
-    except Exception:
-        pass
+            for k in mix:
+                mix[k] = sorted(mix[k], key=lambda x: x["usage"], reverse=True)[:5]
+            HEALTH["savantPitcherArsenalOk"] = True
+        else:
+            warn(f"pitcher-arsenal: required columns missing from {list(df.columns)[:8]}...")
+    except Exception as e:
+        warn(f"pitcher-arsenal fetch failed ({type(e).__name__}: {e})")
     return mix
 
 
+# --------------------------- schedule + pitchers ----------------------------
+
+_PITCHER_CACHE = {}
+
+
 def get_pitcher_rates(pid):
-    """Season hit-rate-allowed and HR-rate-allowed per batter faced, from StatsAPI.
-    Mirrors the fields buildPitcherProfile() computes in the JS."""
+    """Season hit/HR-rate-allowed per batter faced + handedness in ONE hydrated
+    call (the old version made two, and the hand lookup was UNGUARDED -- a single
+    failure there killed the whole build). Cached per pid for doubleheaders.
+    Returns None on any failure; the model treats a null pitcher as league-rate
+    with a 'partial data' flag."""
+    if pid in _PITCHER_CACHE:
+        return _PITCHER_CACHE[pid]
+    result = None
     try:
-        stats = http_json(
-            f"{STATS_API}/people/{pid}/stats?stats=season&group=pitching&season={YEAR}"
+        data = http_json(
+            f"{STATS_API}/people/{pid}"
+            f"?hydrate=stats(group=[pitching],type=[season],season={YEAR})"
         )
-    except Exception:
-        return None
-    splits = (stats.get("stats") or [{}])[0].get("splits") or []
-    if not splits:
-        return None
-    st = splits[0].get("stat", {})
-    bf = nv(st.get("battersFaced"))
-    if not bf:
-        return None
-    obp = nv(st.get("obp"))
-    bb = nv(st.get("baseOnBalls"))
-    hr = nv(st.get("homeRuns"))
-    bb_pct = (bb / bf) if bb is not None else None
-    hit_rate_allowed = max(0.01, obp - bb_pct) if (obp is not None and bb_pct is not None) else None
-    hr_rate_allowed = (hr / bf) if hr is not None else None
-    hand = (
-        http_json(f"{STATS_API}/people/{pid}")
-        .get("people", [{}])[0]
-        .get("pitchHand", {})
-        .get("code")
-    )
-    return {
-        "hand": hand,
-        "hitRateAllowedPerPA": hit_rate_allowed,
-        "hrRateAllowedPerPA": hr_rate_allowed,
-        "battersFaced": bf,
-        # WHIP and HR/9 come straight from the same season stat block (real data) --
-        # these populate the pitcher fields in the detail panel that were showing "—".
-        "whip": nv(st.get("whip")),
-        "hrPer9": nv(st.get("homeRunsPer9")),
-    }
+        person = (data.get("people") or [{}])[0]
+        hand = (person.get("pitchHand") or {}).get("code")
+        st = {}
+        for block in person.get("stats") or []:
+            splits = block.get("splits") or []
+            if splits:
+                st = splits[0].get("stat", {})
+                break
+        bf = nv(st.get("battersFaced"))
+        if bf:
+            obp = nv(st.get("obp"))
+            bb = nv(st.get("baseOnBalls"))
+            hr = nv(st.get("homeRuns"))
+            bb_frac = (bb / bf) if bb is not None else None
+            hit_rate_allowed = (
+                max(0.01, obp - bb_frac)
+                if (obp is not None and bb_frac is not None) else None
+            )
+            result = {
+                "hand": hand,
+                "hitRateAllowedPerPA": hit_rate_allowed,
+                "hrRateAllowedPerPA": (hr / bf) if hr is not None else None,
+                "battersFaced": bf,
+                "whip": nv(st.get("whip")),
+                "hrPer9": nv(st.get("homeRunsPer9")),
+            }
+    except Exception as e:
+        warn(f"pitcher rates failed pid={pid} ({type(e).__name__})")
+    if result is None:
+        HEALTH["pitcherMisses"] += 1
+    _PITCHER_CACHE[pid] = result
+    return result
 
 
 def get_schedule():
-    today = datetime.datetime.now().strftime("%Y-%m-%d")
     data = http_json(
-        f"{STATS_API}/schedule?sportId=1&date={today}"
+        f"{STATS_API}/schedule?sportId=1&date={TODAY}"
         "&hydrate=probablePitcher(note),team,venue,linescore"
     )
     games = []
     for date in data.get("dates", []):
         games.extend(date.get("games", []))
-    return games, today
+    return games
 
 
 # ------------------------------- assembly -----------------------------------
 
 def load_calibration():
-    """Best-effort read of a committed calibration.json (same file the Render route
-    serves). None -> model runs uncalibrated. Version-gated like the JS side."""
+    """Best-effort read of a committed calibration.json. None -> uncalibrated.
+    Version-gated like the JS side."""
     try:
         with open("calibration.json") as f:
             cal = json.load(f)
-        if isinstance(cal, dict) and cal.get("modelVersion") == "log5-v5.0":
+        if isinstance(cal, dict) and cal.get("modelVersion") == CAL_MODEL_VERSION:
             return cal
-    except Exception:
+        warn(f"calibration.json present but modelVersion != {CAL_MODEL_VERSION} -- ignored")
+    except FileNotFoundError:
         pass
+    except Exception as e:
+        warn(f"calibration.json unreadable ({type(e).__name__}) -- running uncalibrated")
     return None
+
+
+def project_side(hitters, opp_pitcher, ctx, league, calibration):
+    out = []
+    for h in hitters:
+        hit = M.project_hit(h, opp_pitcher, ctx, league, calibration)
+        hr = M.project_hr(h, opp_pitcher, ctx, league, calibration)
+        sm = h.get("_savant") or {}
+        out.append({
+            "hitterId": h["id"], "name": h["name"], "pos": h["pos"],
+            "teamAbbr": h["teamAbbr"], "batSide": h.get("batSide"),
+            "hitProb": hit["perGame"], "hitProbPerPA": hit["perPA"], "hitTier": hit["tier"],
+            "hitDataQuality": hit["dataQuality"], "hitSignals": hit["signals"], "hitRisks": hit["risks"],
+            "hitInputs": hit["inputs"],
+            "hrProb": hr["perGame"], "hrProbPerPA": hr["perPA"], "hrTier": hr["tier"],
+            "hrDataQuality": hr["dataQuality"], "hrSignals": hr["signals"], "hrRisks": hr["risks"],
+            "hrInputs": hr["inputs"],
+            "expectedPA": hit["expectedPA"], "batOrderAvg": h.get("orderAvg"),
+            "lineupUnconfirmed": True,
+            "viewScore": (hit["perGame"] + hr["perGame"]),
+            "metrics": {
+                "avg": h.get("avg"), "obp": h.get("obp"), "hr": h.get("hr"),
+                "hrRate": h.get("hrRate"),
+                "kPct": h.get("kPct"), "babip": h.get("babip"),
+                "barrelPct": sm.get("barrelPct"),
+                "hardHitPct": sm.get("hardHitPct"),
+                "avgEV": sm.get("avgEV"),
+                "pullPct": sm.get("pullPct"),
+                "fbPct": sm.get("fbPct"),
+                "xBA": sm.get("xBA"),
+                "xSLG": sm.get("xSLG"),
+                "xwOBA": sm.get("xwOBA"),
+                "sweetSpotPct": sm.get("sweetSpotPct"),
+                "maxEV": sm.get("maxEV"),
+                "hrDistance": sm.get("hrDistance"),
+                "launchAngle": sm.get("launchAngle"),
+                "vsPitch": sm.get("vsPitch"),
+            },
+        })
+    out.sort(key=lambda x: x["viewScore"], reverse=True)
+    return out
 
 
 def build_board():
     pool = build_batter_pool()
-    # Merge Savant advanced metrics (bulk fetch, name-joined) onto each hitter.
     savant = fetch_savant_metrics()
     pitch_mix = fetch_pitcher_pitch_mix()
     for h in pool:
-        sm = savant.get(_norm_name(h.get("name")), {})
-        h["_savant"] = sm  # stashed for the display metrics block below
+        h["_savant"] = savant.get(_norm_name(h.get("name")), {})
     league = M.league_rates(pool)
     calibration = load_calibration()
-    games, today = get_schedule()
+    games = get_schedule()
 
     by_team = {}
     for h in pool:
@@ -510,55 +667,18 @@ def build_board():
         hp = get_pitcher_rates(home_prob["id"]) if home_prob and home_prob.get("id") else None
         ap = get_pitcher_rates(away_prob["id"]) if away_prob and away_prob.get("id") else None
         if hp and home_prob:
+            hp = dict(hp)  # cached dict -- don't mutate the shared copy
             hp["name"] = home_prob.get("fullName")
             hp["pitchMix"] = pitch_mix.get(_norm_name(hp["name"]))
         if ap and away_prob:
+            ap = dict(ap)
             ap["name"] = away_prob.get("fullName")
             ap["pitchMix"] = pitch_mix.get(_norm_name(ap["name"]))
 
         ctx = {"park": park, "weather": {}}  # weather omitted in v1; model treats temp=None safely
 
-        def project_side(hitters, opp_pitcher):
-            out = []
-            for h in hitters:
-                hit = M.project_hit(h, opp_pitcher, ctx, league, calibration)
-                hr = M.project_hr(h, opp_pitcher, ctx, league, calibration)
-                out.append({
-                    "hitterId": h["id"], "name": h["name"], "pos": h["pos"],
-                    "teamAbbr": h["teamAbbr"], "batSide": h.get("batSide"),
-                    "hitProb": hit["perGame"], "hitProbPerPA": hit["perPA"], "hitTier": hit["tier"],
-                    "hitDataQuality": hit["dataQuality"], "hitSignals": hit["signals"], "hitRisks": hit["risks"],
-                    "hitInputs": hit["inputs"],
-                    "hrProb": hr["perGame"], "hrProbPerPA": hr["perPA"], "hrTier": hr["tier"],
-                    "hrDataQuality": hr["dataQuality"], "hrSignals": hr["signals"], "hrRisks": hr["risks"],
-                    "hrInputs": hr["inputs"],
-                    "expectedPA": hit["expectedPA"], "batOrderAvg": h.get("orderAvg"),
-                    "lineupUnconfirmed": True,
-                    "viewScore": (hit["perGame"] + hr["perGame"]),
-                    "metrics": {
-                        "avg": nv(h.get("avg")), "obp": nv(h.get("obp")), "hr": nv(h.get("hr")),
-                        "hrRate": nv(h.get("hrRate")),
-                        "kPct": nv(h.get("kPct")), "babip": nv(h.get("babip")),
-                        "barrelPct": (h.get("_savant") or {}).get("barrelPct"),
-                        "hardHitPct": (h.get("_savant") or {}).get("hardHitPct"),
-                        "avgEV": (h.get("_savant") or {}).get("avgEV"),
-                        "pullPct": (h.get("_savant") or {}).get("pullPct"),
-                        "fbPct": (h.get("_savant") or {}).get("fbPct"),
-                        "xBA": (h.get("_savant") or {}).get("xBA"),
-                        "xSLG": (h.get("_savant") or {}).get("xSLG"),
-                        "xwOBA": (h.get("_savant") or {}).get("xwOBA"),
-                        "sweetSpotPct": (h.get("_savant") or {}).get("sweetSpotPct"),
-                        "maxEV": (h.get("_savant") or {}).get("maxEV"),
-                        "hrDistance": (h.get("_savant") or {}).get("hrDistance"),
-                        "launchAngle": (h.get("_savant") or {}).get("launchAngle"),
-                        "vsPitch": (h.get("_savant") or {}).get("vsPitch"),
-                    },
-                })
-            out.sort(key=lambda x: x["viewScore"], reverse=True)
-            return out
-
-        home_hitters = project_side(by_team.get(home_abbr, []), ap)
-        away_hitters = project_side(by_team.get(away_abbr, []), hp)
+        home_hitters = project_side(by_team.get(home_abbr, []), ap, ctx, league, calibration)
+        away_hitters = project_side(by_team.get(away_abbr, []), hp, ctx, league, calibration)
         all_h = home_hitters + away_hitters
 
         merged.append({
@@ -569,8 +689,12 @@ def build_board():
             "weather": {},
             "homeTeam": {"name": home.get("name"), "abbr": home_abbr},
             "awayTeam": {"name": away.get("name"), "abbr": away_abbr},
-            "homeProbable": {"name": hp["name"], "hand": hp.get("hand"), "whip": hp.get("whip"), "hrPer9": hp.get("hrPer9"), "pitchMix": hp.get("pitchMix")} if hp else None,
-            "awayProbable": {"name": ap["name"], "hand": ap.get("hand"), "whip": ap.get("whip"), "hrPer9": ap.get("hrPer9"), "pitchMix": ap.get("pitchMix")} if ap else None,
+            "homeProbable": ({"name": hp["name"], "hand": hp.get("hand"), "whip": hp.get("whip"),
+                              "hrPer9": hp.get("hrPer9"), "pitchMix": hp.get("pitchMix")}
+                             if hp else None),
+            "awayProbable": ({"name": ap["name"], "hand": ap.get("hand"), "whip": ap.get("whip"),
+                              "hrPer9": ap.get("hrPer9"), "pitchMix": ap.get("pitchMix")}
+                             if ap else None),
             "homeMatchups": home_hitters,
             "awayMatchups": away_hitters,
             "topHitTargets": sorted(all_h, key=lambda x: x["hitProb"], reverse=True)[:8],
@@ -578,10 +702,10 @@ def build_board():
             "topOverall": sorted(all_h, key=lambda x: x["viewScore"], reverse=True)[:8],
         })
 
-    board = {
-        "schemaVersion": 5.1,
-        "builtAt": today,
-        "builtTs": datetime.datetime.now().isoformat(),
+    return {
+        "schemaVersion": BOARD_SCHEMA_VERSION,
+        "builtAt": TODAY,
+        "builtTs": datetime.datetime.now(ET).isoformat(),
         "gamesCount": len(merged),
         "calibrationApplied": bool(calibration),
         "poolSize": len(pool),
@@ -589,18 +713,48 @@ def build_board():
             "hitRatePerPA": round(league["hitRatePerPA"], 4),
             "hrRatePerPA": round(league["hrRatePerPA"], 4),
         },
+        "dataHealth": HEALTH,   # additive key; thin client ignores unknown fields
         "games": merged,
     }
-    return board
+
+
+def atomic_write_json(path, obj):
+    """Write to a temp file in the same directory, then os.replace() -- readers
+    (Render) never see a partially written board."""
+    d = os.path.dirname(os.path.abspath(path)) or "."
+    fd, tmp = tempfile.mkstemp(dir=d, prefix=".board_", suffix=".json")
+    try:
+        with os.fdopen(fd, "w") as f:
+            json.dump(obj, f)
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
 
 
 def main():
     board = build_board()
-    with open("daily_board.json", "w") as f:
-        json.dump(board, f)
-    print(f"Wrote daily_board.json: {board['gamesCount']} games, "
-          f"{board['poolSize']} hitters in pool, "
-          f"calibrated={board['calibrationApplied']}")
+
+    # Publish gates: never overwrite a good served board with a hollow one.
+    if board["gamesCount"] < MIN_GAMES_TO_PUBLISH:
+        print(f"NOT PUBLISHING: only {board['gamesCount']} games "
+              f"(min {MIN_GAMES_TO_PUBLISH}) -- likely off-day or schedule fetch issue",
+              file=sys.stderr)
+        sys.exit(1)
+    if board["poolSize"] < MIN_POOL_TO_PUBLISH:
+        print(f"NOT PUBLISHING: pool of {board['poolSize']} hitters "
+              f"(min {MIN_POOL_TO_PUBLISH}) -- upstream data degraded",
+              file=sys.stderr)
+        sys.exit(1)
+
+    atomic_write_json(OUTPUT_PATH, board)
+    print(f"Wrote {OUTPUT_PATH}: {board['gamesCount']} games, "
+          f"{board['poolSize']} hitters, calibrated={board['calibrationApplied']}, "
+          f"hydratedPath={HEALTH['hydratedRosterPath']}, "
+          f"warnings={len(HEALTH['warnings'])}")
 
 
 if __name__ == "__main__":
