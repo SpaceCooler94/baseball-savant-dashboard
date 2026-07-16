@@ -1,23 +1,42 @@
 # ============================================================================
-# mlb_model.py -- Python port of the log5 daily projection model.
+# mlb_model.py -- log5 daily projection model. v5.3
 #
-# This is the model that currently lives in Daily_Matchups.js (v5.1). Porting it
-# here lets it run on GitHub Actions instead of on the phone, producing a finished
-# daily-board JSON that Render serves and MLB_Daily.js just displays.
+# LINEAGE: v5.0-5.2 were a parity-locked port of Daily_Matchups.js. As of v5.3
+# this Python file IS the reference implementation -- the JS parity freeze ends
+# at v5.2 (test_mlb_model.py still proves the v5.2 subset matches the JS; the
+# v5.3 additions are covered by their own unit tests, not JS parity).
 #
-# PORT DISCIPLINE: every function here mirrors its JavaScript counterpart exactly.
-# The companion test (test_mlb_model.py) feeds identical inputs to both the JS and
-# this Python and asserts the outputs match to the same rounding. Nothing here is
-# trusted until that parity test passes -- a silent Python/JS divergence would make
-# the served board wrong in ways no single-file review would catch.
+# v5.3 -- SHRINKAGE EVERYWHERE (the Wagaman fix):
+#   v5.2 shrank platoon *splits* toward season average, but every other input
+#   rate was taken at face value. Result on live boards: a 39-PA bench bat with
+#   2 HR (5.1% HR/PA) ranked as the #2 HR play, ahead of a 32-HR slugger, and
+#   0-HR small samples projected impossible ~0% HR rates. v5.3 applies the same
+#   empirical-Bayes discipline to all four rates feeding log5:
+#     - batter hit base (OBP-BB%)      -> shrunk toward league, prior 150 PA
+#     - batter HR/PA                   -> shrunk toward league, prior 250 PA
+#       (HR rate is the noisiest input; it stabilizes far slower than AVG)
+#     - pitcher hit-rate allowed       -> shrunk toward league, prior 200 BF
+#     - pitcher HR-rate allowed        -> shrunk toward league, prior 250 BF
+#   Split shrinkage from v5.2 is unchanged and stacks on top (the split ratio
+#   multiplies the now-shrunk base).
+#   Unknown sample size falls back to a conservative 0.25 weight -- same rule
+#   v5.2 used for unknown split PA.
 #
-# This file (Part 1) is the pure math only: log5, expected PA, game probability,
-# league rates, batter/pitcher rate helpers, and the two projection functions.
-# Data fetching (Savant via pybaseball, schedule via StatsAPI) comes in Part 2 once
-# this core is proven identical to the JS.
+# Everything else (log5, expectedPA, gameProb, calibration, tiers, signals,
+# _js_round half-up rounding, output field shape) is byte-for-byte v5.2 logic.
 # ============================================================================
 
 import math
+
+# Empirical-Bayes priors (in PA for batters, BF for pitchers). Larger prior =
+# less trust in small samples. HR gets the biggest prior because HR/PA is the
+# slowest rate to stabilize; pitcher priors sit between (rates-per-BF stabilize
+# faster than batter HR, slower than batter contact).
+HIT_BASE_PRIOR_PA = 150
+HR_PRIOR_PA = 250
+PITCHER_HIT_PRIOR_BF = 200
+PITCHER_HR_PRIOR_BF = 250
+UNKNOWN_SAMPLE_WEIGHT = 0.25
 
 
 def clamp01(v):
@@ -29,7 +48,7 @@ def clamp_range(v, lo, hi):
 
 
 def log5(a, b, l):
-    """Matchup probability blend. Mirrors log5() in Daily_Matchups.js exactly.
+    """Matchup probability blend.
     P = (A*B/L) / (A*B/L + (1-A)(1-B)/(1-L))"""
     a = clamp01(a)
     b = clamp01(b)
@@ -39,10 +58,25 @@ def log5(a, b, l):
     return num / den
 
 
+def shrink(rate, n, prior_n, league_rate):
+    """Empirical-Bayes shrinkage: weight = n / (n + prior_n).
+    None rate -> None (caller falls back to league). None/invalid n -> the
+    conservative UNKNOWN_SAMPLE_WEIGHT. None league -> rate unshrunk (lets the
+    v5.2 parity tests keep passing by simply not passing a league rate)."""
+    if rate is None:
+        return None
+    if league_rate is None:
+        return rate
+    if n is None or not _finite(n) or n <= 0:
+        w = UNKNOWN_SAMPLE_WEIGHT
+    else:
+        w = n / (n + prior_n)
+    return w * rate + (1 - w) * league_rate
+
+
 def expected_pa(order_avg):
-    """PA-per-lineup-slot. Mirrors expectedPA() in Daily_Matchups.js.
-    Grounded in real 2023 full-season data (leadoff ~4.6, 9-hole ~3.75,
-    ~-0.11 PA per slot down). Unknown slot -> whole-lineup middle."""
+    """PA-per-lineup-slot. Grounded in real 2023 full-season data (leadoff ~4.6,
+    9-hole ~3.75, ~-0.11 PA per slot down). Unknown slot -> whole-lineup middle."""
     if order_avg is None or not _finite(order_avg):
         return 3.9
     slot = clamp_range(order_avg, 1, 9)
@@ -50,7 +84,7 @@ def expected_pa(order_avg):
 
 
 def game_prob(per_pa, n):
-    """1 - (1-p)^n. Mirrors gameProb() in Daily_Matchups.js."""
+    """1 - (1-p)^n."""
     return 1 - math.pow(1 - clamp01(per_pa), n)
 
 
@@ -62,8 +96,8 @@ def _finite(v):
 
 
 def _nv(v):
-    """Mirror of the JS nv(): None/''/non-numeric -> None, else float.
-    Critically NOT coercing None->0 (the bug we killed earlier)."""
+    """None/''/non-numeric -> None, else float. Critically NOT coercing
+    None->0 (the bug we killed earlier)."""
     if v is None or v == "":
         return None
     try:
@@ -76,10 +110,11 @@ def _nv(v):
 # --------------------------- league + rate helpers ---------------------------
 
 def league_rates(players):
-    """PA-weighted league baseline rates from today's full pool. Mirrors
-    leagueRates() in Daily_Matchups.js. Hit rate uses OBP - BB% as a hits-per-PA
-    approximation (omits the small HBP term, ~1-2% of PA, documented); HR rate is
-    exact (hrRate field is already HR/PA)."""
+    """PA-weighted league baseline rates from today's full pool. Hit rate uses
+    OBP - BB% as a hits-per-PA approximation (omits the small HBP term, ~1-2%
+    of PA, documented); HR rate is exact (hrRate field is already HR/PA).
+    NOTE: baselines are built from RAW rates on purpose -- shrinkage targets
+    this baseline, so the baseline itself must not be shrunk."""
     pa_sum = 0.0
     hit_sum = 0.0
     hr_sum = 0.0
@@ -100,22 +135,19 @@ def league_rates(players):
     }
 
 
-def batter_hit_rate_per_pa(h, pitcher_hand):
-    """Platoon-adjusted hits-per-PA. Mirrors batterHitRatePerPA() in the JS.
-    Base = OBP-BB%; multiplied by a split-AVG/season-AVG ratio (clamped +/-40%).
-
-    v5.2: the split average is now SHRUNK toward the season average based on how many
-    PA the split is built on (empirical-Bayes regression to the mean). Without this, a
-    40-PA vs-LHP sample hitting .310 was trusted as much as a 400-PA one, letting noise
-    swing the multiplier to its +40% cap and pushing bench players to the top of the
-    board. With SPLIT_PRIOR_PA=150 (a standard regression constant for platoon splits),
-    a 50-PA split is weighted ~25% split / ~75% season; a 300-PA split ~67% split. This
-    is the same shrinkage discipline the Python analytics stack already uses."""
+def batter_hit_rate_per_pa(h, pitcher_hand, league_rate=None):
+    """Platoon-adjusted hits-per-PA.
+    v5.3: the BASE rate (OBP-BB%) is now shrunk toward the league rate by
+    season PA (prior HIT_BASE_PRIOR_PA) before the platoon multiplier applies.
+    A 200-PA rookie's .350 OBP no longer outranks a 650-PA star at face value.
+    The v5.2 split shrinkage (prior 150 PA toward season avg) is unchanged and
+    multiplies the shrunk base."""
     obp = _nv(h.get("obp"))
     bb_pct = _nv(h.get("bbPct"))
     if obp is None or bb_pct is None:
         return None
-    base = max(0.01, obp - bb_pct / 100)
+    raw_base = max(0.01, obp - bb_pct / 100)
+    base = shrink(raw_base, _nv(h.get("pa")), HIT_BASE_PRIOR_PA, league_rate)
     season_avg = _nv(h.get("avg"))
     if pitcher_hand == "L":
         split_avg = _nv(h.get("vsLAvg"))
@@ -127,9 +159,7 @@ def batter_hit_rate_per_pa(h, pitcher_hand):
         split_avg = None
         split_pa = None
     if split_avg is not None and season_avg is not None and season_avg > 0:
-        # Shrink split_avg toward season_avg. Weight = split_pa / (split_pa + prior).
-        # If split_pa is unknown, fall back to a conservative low weight so an unmeasured
-        # split can't dominate.
+        # v5.2 logic, unchanged: shrink split_avg toward season_avg.
         SPLIT_PRIOR_PA = 150
         w = (split_pa / (split_pa + SPLIT_PRIOR_PA)) if split_pa is not None else 0.25
         shrunk_split = w * split_avg + (1 - w) * season_avg
@@ -138,11 +168,16 @@ def batter_hit_rate_per_pa(h, pitcher_hand):
     return base
 
 
-def batter_hr_rate_per_pa(h):
-    """Season HR/PA. Mirrors batterHrRatePerPA(). No split HR data exists anywhere
-    in the pipeline, so this is season-only by necessity, not omission."""
+def batter_hr_rate_per_pa(h, league_rate=None):
+    """Season HR/PA, shrunk toward league by season PA (prior HR_PRIOR_PA).
+    v5.3: this is THE Wagaman fix -- 2 HR in 39 PA now projects ~3.5% HR/PA
+    instead of 5.1%, and 0 HR in 62 PA projects ~2.6% instead of ~0%.
+    No split HR data exists anywhere in the pipeline, so season-only remains
+    a necessity, not an omission."""
     r = _nv(h.get("hrRate"))
-    return r / 100 if r is not None else None
+    if r is None:
+        return None
+    return shrink(r / 100, _nv(h.get("pa")), HR_PRIOR_PA, league_rate)
 
 
 # --------------------------- calibration (Platt) ----------------------------
@@ -157,7 +192,7 @@ def _sigmoid(z):
 
 
 def apply_calibration(raw_per_pa, cal_block):
-    """Mirror of applyCalibration() in the JS. Logit-space scale+offset."""
+    """Logit-space scale+offset."""
     if not cal_block or cal_block.get("scale") is None:
         return raw_per_pa, False
     z = _logit(raw_per_pa)
@@ -168,11 +203,9 @@ def apply_calibration(raw_per_pa, cal_block):
 # ------------------------------- projections --------------------------------
 
 def _js_round(v):
-    """JavaScript Math.round: rounds half UP (toward +inf), unlike Python's built-in
-    round() which uses banker's rounding (half to even). The parity test caught these
-    diverging on exact .5 boundaries (e.g. 304.5 -> JS 305, Python 304), which would
-    have made the served board silently disagree with the phone model. Since the JS is
-    the shipping reference we're porting to match, we replicate its behavior."""
+    """JavaScript Math.round: rounds half UP (toward +inf), unlike Python's
+    built-in round() (banker's rounding). Kept from the parity era -- boards
+    must stay comparable across versions."""
     return math.floor(v + 0.5)
 
 
@@ -180,11 +213,21 @@ def _round3(v):
     return _js_round(v * 1000) / 1000
 
 
+def _pitcher_rate(p, field, prior_bf, league_rate):
+    """v5.3: pitcher rates are shrunk toward league by batters faced. A 45-BF
+    spot starter's inflated/deflated rates no longer swing every hitter in
+    that game to a board extreme."""
+    if not p:
+        return None
+    return shrink(_nv(p.get(field)), _nv(p.get("battersFaced")), prior_bf, league_rate)
+
+
 def project_hit(h, p, ctx, league, calibration=None):
-    """Mirror of projectHit(). Returns the same field shape the JS emits."""
+    """Returns the same field shape v5.0-5.2 emitted."""
     p_hand = p.get("hand") if p else None
-    batter_rate = batter_hit_rate_per_pa(h, p_hand)
-    pitcher_rate = p.get("hitRateAllowedPerPA") if p else None
+    batter_rate = batter_hit_rate_per_pa(h, p_hand, league["hitRatePerPA"])
+    pitcher_rate = _pitcher_rate(p, "hitRateAllowedPerPA",
+                                 PITCHER_HIT_PRIOR_BF, league["hitRatePerPA"])
     if batter_rate is not None and pitcher_rate is not None:
         data_quality = "full"
     elif batter_rate is not None or pitcher_rate is not None:
@@ -222,6 +265,11 @@ def project_hit(h, p, ctx, league, calibration=None):
         sig.append({"label": "Recent form", "cls": "cyan"})
     elif (l5 is not None and l5 < .620) or (l10 is not None and l10 < .670):
         risk.append({"label": "Cold recent form", "cls": "orange"})
+    # v5.3: small-sample flag -- shrinkage already discounts the rate, but the
+    # reader should still see WHY a hot small sample isn't ranked higher.
+    pa = _nv(h.get("pa"))
+    if pa is not None and pa < HIT_BASE_PRIOR_PA:
+        risk.append({"label": "Small sample (%d PA), rate regressed" % int(pa), "cls": "orange"})
     if data_quality != "full":
         risk.append({"label": "Thin data, used league baseline" if data_quality == "thin"
                      else "Partial data, one side used league baseline", "cls": "orange"})
@@ -244,10 +292,11 @@ def project_hit(h, p, ctx, league, calibration=None):
 
 
 def project_hr(h, p, ctx, league, calibration=None):
-    """Mirror of projectHR(). Park factor multiplicative, conservative temp nudge,
-    NO wind (needs stadium azimuth we don't have)."""
-    batter_rate = batter_hr_rate_per_pa(h)
-    pitcher_rate = p.get("hrRateAllowedPerPA") if p else None
+    """Park factor multiplicative, conservative temp nudge, NO wind (needs
+    stadium azimuth we don't have)."""
+    batter_rate = batter_hr_rate_per_pa(h, league["hrRatePerPA"])
+    pitcher_rate = _pitcher_rate(p, "hrRateAllowedPerPA",
+                                 PITCHER_HR_PRIOR_BF, league["hrRatePerPA"])
     if batter_rate is not None and pitcher_rate is not None:
         data_quality = "full"
     elif batter_rate is not None or pitcher_rate is not None:
@@ -281,6 +330,9 @@ def project_hr(h, p, ctx, league, calibration=None):
         risk.append({"label": "Pitcher park", "cls": "orange"})
     if temp is not None and temp >= 82:
         sig.append({"label": "Warm carry weather", "cls": "cyan"})
+    pa = _nv(h.get("pa"))
+    if pa is not None and pa < HR_PRIOR_PA:
+        risk.append({"label": "Small sample (%d PA), HR rate regressed" % int(pa), "cls": "orange"})
     if data_quality != "full":
         risk.append({"label": "Thin data, used league baseline" if data_quality == "thin"
                      else "Partial data, one side used league baseline", "cls": "orange"})
