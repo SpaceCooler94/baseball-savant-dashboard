@@ -1,10 +1,23 @@
 # ============================================================================
-# mlb_model.py -- log5 daily projection model. v5.3
+# mlb_model.py -- log5 daily projection model. v5.4
 #
 # LINEAGE: v5.0-5.2 were a parity-locked port of Daily_Matchups.js. As of v5.3
 # this Python file IS the reference implementation -- the JS parity freeze ends
 # at v5.2 (test_mlb_model.py still proves the v5.2 subset matches the JS; the
 # v5.3 additions are covered by their own unit tests, not JS parity).
+#
+# v5.4 -- CALIBRATION MOVES PER-GAME:
+#   Calibration now applies to the per-GAME probability (after game_prob), not
+#   the per-PA rate. The settled outcome is binary per game ("did he get a
+#   hit"), so that is the only level a Platt fit can be estimated at honestly;
+#   calibrating per-PA against per-game outcomes would require pretending a
+#   game's PAs are independent Bernoulli trials, which they are not. Output
+#   changes: perPA is now always the RAW rate, perGame is calibrated when a
+#   valid calibration block is present, and rawPerGame is emitted alongside so
+#   the settlement ledger can always record the uncalibrated prediction (fits
+#   must NEVER see calibrated outputs -- that is a feedback loop). MODEL_VERSION
+#   below is stamped on boards and ledger rows; calibrate.py filters on it so a
+#   fit never mixes rows from different model math.
 #
 # v5.3 -- SHRINKAGE EVERYWHERE (the Wagaman fix):
 #   v5.2 shrank platoon *splits* toward season average, but every other input
@@ -27,6 +40,13 @@
 # ============================================================================
 
 import math
+
+# Stamped on every board and ledger row; calibration fits filter on it so a
+# Platt fit never mixes predictions produced by different model math. Bump
+# whenever any change alters the raw probabilities (priors, log5 inputs,
+# park/temp handling, expectedPA...). The fitting ledger effectively restarts
+# at each bump; old rows remain for ROI history.
+MODEL_VERSION = "log5-v5.4"
 
 # Empirical-Bayes priors (in PA for batters, BF for pitchers). Larger prior =
 # less trust in small samples. HR gets the biggest prior because HR/PA is the
@@ -237,10 +257,13 @@ def project_hit(h, p, ctx, league, calibration=None):
     a = batter_rate if batter_rate is not None else league["hitRatePerPA"]
     b = pitcher_rate if pitcher_rate is not None else league["hitRatePerPA"]
     raw_per_pa = log5(a, b, league["hitRatePerPA"])
-    cal_hit = calibration.get("hit") if calibration else None
-    per_pa, applied = apply_calibration(raw_per_pa, cal_hit)
     n = expected_pa(h.get("orderAvg"))
-    per_game = game_prob(per_pa, n)
+    raw_per_game = game_prob(raw_per_pa, n)
+    # v5.4: Platt calibration applies to the per-GAME probability -- the level
+    # at which outcomes are actually observed and fits are estimated.
+    cal_hit = calibration.get("hit") if calibration else None
+    per_game, applied = apply_calibration(raw_per_game, cal_hit)
+    per_pa = raw_per_pa  # perPA is always raw as of v5.4
     tier = "A" if per_game >= .70 else "B" if per_game >= .60 else "C" if per_game >= .50 else "D"
     sig, risk = [], []
     season_rate = None
@@ -276,6 +299,7 @@ def project_hit(h, p, ctx, league, calibration=None):
     return {
         "perPA": _round3(per_pa),
         "perGame": _round3(per_game),
+        "rawPerGame": _round3(raw_per_game),
         "expectedPA": n,
         "tier": tier,
         "dataQuality": data_quality,
@@ -314,10 +338,11 @@ def project_hr(h, p, ctx, league, calibration=None):
     elif temp is not None and temp <= 45:
         raw_per_pa *= 0.94
     raw_per_pa = clamp01(raw_per_pa)
-    cal_hr = calibration.get("hr") if calibration else None
-    per_pa, applied = apply_calibration(raw_per_pa, cal_hr)
     n = expected_pa(h.get("orderAvg"))
-    per_game = game_prob(per_pa, n)
+    raw_per_game = game_prob(raw_per_pa, n)
+    cal_hr = calibration.get("hr") if calibration else None
+    per_game, applied = apply_calibration(raw_per_game, cal_hr)
+    per_pa = raw_per_pa  # perPA is always raw as of v5.4
     tier = "A" if per_game >= .20 else "B" if per_game >= .13 else "C" if per_game >= .07 else "D"
     sig, risk = [], []
     if pitcher_rate is not None and pitcher_rate > league["hrRatePerPA"] * 1.25:
@@ -339,6 +364,7 @@ def project_hr(h, p, ctx, league, calibration=None):
     return {
         "perPA": _round3(per_pa),
         "perGame": _round3(per_game),
+        "rawPerGame": _round3(raw_per_game),
         "calibrationApplied": applied,
         "expectedPA": n,
         "tier": tier,
