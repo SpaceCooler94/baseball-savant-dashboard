@@ -1,0 +1,82 @@
+# .github/workflows/daily_board.yml
+#
+# Daily pipeline: settle yesterday's board -> refresh calibration -> build
+# today's board -> archive + commit. Order matters: settlement and calibration
+# run BEFORE the build so today's board uses the freshest calibration.json.
+#
+# NOTES
+# - Cron is UTC. 13:30 UTC = 09:30 ET during daylight time, 08:30 ET in
+#   winter -- both are after West Coast games settle and before first pitch.
+#   build_daily_board.py pins its own dates to America/New_York, so the exact
+#   trigger hour only affects freshness, never which day gets built.
+# - Settlement failure must not block the day's board (continue-on-error);
+#   settle.py is idempotent and completes partial days on the next run.
+# - calibrate.py always exits 0 on "no publish" -- gates live inside it.
+# - Pin dependency versions after the first green run (supply-chain: an
+#   unpinned pybaseball release silently changes your Savant columns).
+
+name: daily-board
+
+on:
+  schedule:
+    - cron: "30 13 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: daily-board
+  cancel-in-progress: false
+
+jobs:
+  board:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install "requests>=2.31,<3" "pybaseball>=2.2,<3" "pandas>=2,<3"
+
+      - name: Settle yesterday
+        continue-on-error: true
+        run: python settle.py
+
+      - name: Update zone cache
+        continue-on-error: true
+        run: python zone_engine.py
+        # First ever run: workflow_dispatch and run
+        #   python zone_engine.py --backfill <season opener date>
+        # manually (or bump timeout-minutes and edit this step once) --
+        # after the backfill, this incremental step costs one small pull.
+
+      - name: Refresh calibration
+        run: python calibrate.py
+
+      - name: Build today's board
+        run: python build_daily_board.py
+
+      - name: Archive board
+        run: |
+          mkdir -p boards
+          TODAY=$(TZ=America/New_York date +%F)
+          cp daily_board.json "boards/${TODAY}.json"
+
+      - name: Commit results
+        run: |
+          git config user.name "board-bot"
+          git config user.email "board-bot@users.noreply.github.com"
+          git add daily_board.json boards/ ledger/ calibration.json zones_cache.json || true
+          if git diff --cached --quiet; then
+            echo "Nothing to commit"
+          else
+            git commit -m "board $(TZ=America/New_York date +%F) [skip ci]"
+            git push
+          fi
