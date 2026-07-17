@@ -1,0 +1,58 @@
+# .github/workflows/zone_backfill.yml
+#
+# ONE-TIME (per season) zone-cache backfill, triggered manually from the
+# GitHub website or app -- no local shell needed. Pulls the whole season of
+# pitch-level Statcast in weekly chunks and commits zones_cache.json; after
+# this, the daily workflow's incremental step keeps it current.
+#
+# Safe to leave in the repo: it only runs when you press the button, and
+# you'll want it again next April.
+
+name: zone-backfill
+
+on:
+  workflow_dispatch:
+    inputs:
+      start_date:
+        description: "Season opener (YYYY-MM-DD)"
+        required: true
+        default: "2026-03-26"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: daily-board          # serialize with the daily run so pushes don't collide
+  cancel-in-progress: false
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90       # a full season of chunked Statcast pulls is slow
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install "requests>=2.31,<3" "pybaseball>=2.2,<3" "pandas>=2,<3"
+
+      - name: Backfill zone cache
+        run: python zone_engine.py --backfill "${{ github.event.inputs.start_date }}"
+
+      - name: Commit cache
+        run: |
+          git config user.name "board-bot"
+          git config user.email "board-bot@users.noreply.github.com"
+          git add zones_cache.json
+          if git diff --cached --quiet; then
+            echo "Nothing to commit"
+          else
+            git commit -m "zone cache backfill from ${{ github.event.inputs.start_date }} [skip ci]"
+            git pull --rebase origin main
+            git push
+          fi
