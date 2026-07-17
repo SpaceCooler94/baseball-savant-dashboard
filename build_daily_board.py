@@ -63,6 +63,8 @@ from zoneinfo import ZoneInfo
 import requests
 
 import mlb_model as M
+import recent_form as RF
+import zone_engine as Z
 
 # ------------------------------ configuration -------------------------------
 
@@ -76,8 +78,7 @@ USER_AGENT = "mlb-daily-board/1.0 (personal analytics pipeline)"
 
 MIN_PA = 25                 # pool floor, matches the model's MIN_PA
 SPLIT_SIT_CODES = "vl,vr"
-CAL_MODEL_VERSION = "log5-v5.0"   # calibration gate -- bump alongside the JS
-BOARD_SCHEMA_VERSION = 5.3
+BOARD_SCHEMA_VERSION = 5.5   # 5.5: recent-form/profiles/mix-drift/zone layer (reference only; modelVersion unchanged)
 LEAGUE_K_PER_BF_PCT = 22.0   # rough league K%/BF baseline for angle thresholds
 
 # Publish gates: don't overwrite a good served board with a hollow one.
@@ -134,6 +135,9 @@ HEALTH = {
     "savantExpectedOk": False,
     "savantBatterArsenalOk": False,
     "savantPitcherArsenalOk": False,
+    "recentFormOk": False,
+    "zoneCacheOk": False,
+    "zoneCacheAsOf": None,
     "warnings": [],
 }
 
@@ -606,9 +610,9 @@ def load_calibration():
     try:
         with open("calibration.json") as f:
             cal = json.load(f)
-        if isinstance(cal, dict) and cal.get("modelVersion") == CAL_MODEL_VERSION:
+        if isinstance(cal, dict) and cal.get("modelVersion") == M.MODEL_VERSION:
             return cal
-        warn(f"calibration.json present but modelVersion != {CAL_MODEL_VERSION} -- ignored")
+        warn(f"calibration.json present but modelVersion != {M.MODEL_VERSION} -- ignored")
     except FileNotFoundError:
         pass
     except Exception as e:
@@ -647,35 +651,69 @@ def pitch_fit(vs_pitch, pitch_mix):
 
 
 def compute_angles(row, opp):
-    """Deterministic betting-angle flags. Each one is auditable from fields
-    already on the row -- no black-box scoring. These do NOT move the model's
-    probabilities; they exist to separate 'model likes it' from 'underlying
-    quality agrees / disagrees'."""
+    """Deterministic betting-angle flags, each with a STABLE key -- settle.py
+    stamps keys onto ledger rows so every angle's residual lift is measurable
+    later. Auditable from fields already on the row; none of these move the
+    model's probabilities."""
     angles = []
+    def add(key, label, cls):
+        angles.append({"key": key, "label": label, "cls": cls})
     m = row.get("metrics") or {}
     xba, avg = m.get("xBA"), m.get("avg")
     if xba is not None and avg is not None:
         gap = xba - avg
         if gap >= 0.020:
-            angles.append({"label": "xBA %+d pts vs AVG, positive regression due" % round(gap * 1000), "cls": "green"})
+            add("xba_pos", "xBA %+d pts vs AVG, positive regression due" % round(gap * 1000), "green")
         elif gap <= -0.020:
-            angles.append({"label": "Overperforming xBA by %d pts" % round(-gap * 1000), "cls": "orange"})
+            add("xba_neg", "Overperforming xBA by %d pts" % round(-gap * 1000), "orange")
     barrel, hr_rate = m.get("barrelPct"), m.get("hrRate")
     if barrel is not None and hr_rate is not None and barrel >= 12 and hr_rate <= 3.5:
-        angles.append({"label": "Barrel rate outruns HR rate, power due", "cls": "green"})
+        add("barrels_due", "Barrel rate outruns HR rate, power due", "green")
     hk = m.get("kPct")
     pk = opp.get("kPct") if opp else None
     if hk is not None and pk is not None:
         if pk >= LEAGUE_K_PER_BF_PCT + 5 and hk >= 27:
-            angles.append({"label": "Strikeout trap: high-K bat vs high-K arm", "cls": "red"})
+            add("k_trap", "Strikeout trap: high-K bat vs high-K arm", "red")
         elif pk <= LEAGUE_K_PER_BF_PCT - 4 and hk <= 18:
-            angles.append({"label": "Ball-in-play matchup: low-K bat vs low-K arm", "cls": "green"})
-    fit = row.get("pitchFitBA")
+            add("bip_matchup", "Ball-in-play matchup: low-K bat vs low-K arm", "green")
+    # Arsenal-fit angles use the CORE fit (>= 15%-usage pitches only -- DTP
+    # rule 4: a 5%-usage pitch never shows up enough to matter). The full-mix
+    # fit stays the display/sort column.
+    fit = row.get("coreFitBA") if row.get("coreFitBA") is not None else row.get("pitchFitBA")
     if fit is not None:
         if fit >= 0.300:
-            angles.append({"label": "Hits this arsenal (.%03d fit)" % round(fit * 1000), "cls": "green"})
+            add("fit_pos", "Hits this arsenal (.%03d core fit)" % round(fit * 1000), "green")
         elif fit <= 0.200:
-            angles.append({"label": "Struggles vs this arsenal (.%03d fit)" % round(fit * 1000), "cls": "orange"})
+            add("fit_neg", "Struggles vs this arsenal (.%03d core fit)" % round(fit * 1000), "orange")
+    # ---- DTP recent-form layer (all reference; see recent_form.py) ----
+    rf = row.get("recentForm")
+    if rf and rf.get("profile"):
+        p = RF.PROFILES[rf["profile"]]
+        add("profile_" + rf["profile"],
+            "%s %s (L10: %.0f%% barrel, %d HR + %d near)" % (
+                p["emoji"], p["label"], rf["barrelPct"], rf["hr"], rf["nearHr"]),
+            "green")
+    if opp:
+        for d in (opp.get("mixDrift") or [])[:2]:
+            add("mix_drift", "SP mix shift: %s %+.0fpp vs season" % (d["pitch"], d["delta"]), "cyan")
+        for cpitch in (opp.get("crushedPitches") or [])[:2]:
+            bits = []
+            if cpitch.get("xSlg") is not None:
+                bits.append("xSLG %.3f" % cpitch["xSlg"])
+            if cpitch.get("hr"):
+                bits.append("%d HR" % cpitch["hr"])
+            add("pitch_crushed", "%s getting crushed L%d (%s)" % (
+                cpitch["pitch"], (opp.get("recentStarts") or RF.RECENT_STARTS), ", ".join(bits) or "recent"),
+                "green")
+    zg = row.get("zoneGrade")
+    if zg == "elite":
+        add("zone_elite", "Zone matchup %d/9 -- elite overlap" % row.get("zoneScore", 0), "green")
+    elif zg == "good":
+        add("zone_good", "Zone matchup %d/9 -- good overlap" % row.get("zoneScore", 0), "green")
+    rfit, sfit = row.get("recentFitBA"), row.get("pitchFitBA")
+    if rfit is not None and sfit is not None and rfit - sfit >= 0.050:
+        add("recent_fit_gap", "Fit improves vs recent mix (.%03d vs .%03d)" % (
+            round(rfit * 1000), round(sfit * 1000)), "cyan")
     return angles
 
 
@@ -690,7 +728,7 @@ def confidence(pa, bf, hit_q, hr_q):
     return "low"
 
 
-def project_side(hitters, opp_pitcher, ctx, league, calibration):
+def project_side(hitters, opp_pitcher, ctx, league, calibration, extras=None):
     out = []
     for h in hitters:
         hit = M.project_hit(h, opp_pitcher, ctx, league, calibration)
@@ -698,19 +736,42 @@ def project_side(hitters, opp_pitcher, ctx, league, calibration):
         sm = h.get("_savant") or {}
         fit_ba, fit_cov = pitch_fit(sm.get("vsPitch"),
                                     (opp_pitcher or {}).get("pitchMix"))
+        core_fit_ba, _ = pitch_fit(sm.get("vsPitch"),
+                                   RF.core_mix((opp_pitcher or {}).get("pitchMix")))
+        recent_fit_ba, _ = pitch_fit(sm.get("vsPitch"),
+                                     RF.core_mix((opp_pitcher or {}).get("recentMix")))
+        ex = extras or {}
+        rf = (ex.get("rfBatters") or {}).get(h["id"])
+        if rf:
+            rf = dict(rf)
+            if rf.get("profile"):
+                rf["profileEmoji"] = RF.PROFILES[rf["profile"]]["emoji"]
+        zone_score, zone_grade = None, None
+        zone_cache = ex.get("zoneCache")
+        used = set((opp_pitcher or {}).get("_usedZones") or [])
+        if zone_cache and used:
+            strong = Z.strong_zones(zone_cache, h["id"])
+            zone_score, zone_grade = Z.score_matchup(strong, used)
         row = {
             "hitterId": h["id"], "name": h["name"], "pos": h["pos"],
             "teamAbbr": h["teamAbbr"], "batSide": h.get("batSide"),
             "hitProb": hit["perGame"], "hitProbPerPA": hit["perPA"], "hitTier": hit["tier"],
+            "hitRawPerGame": hit["rawPerGame"],
             "hitDataQuality": hit["dataQuality"], "hitSignals": hit["signals"], "hitRisks": hit["risks"],
             "hitInputs": hit["inputs"],
             "hrProb": hr["perGame"], "hrProbPerPA": hr["perPA"], "hrTier": hr["tier"],
+            "hrRawPerGame": hr["rawPerGame"],
             "hrDataQuality": hr["dataQuality"], "hrSignals": hr["signals"], "hrRisks": hr["risks"],
             "hrInputs": hr["inputs"],
             "expectedPA": hit["expectedPA"], "batOrderAvg": h.get("orderAvg"),
             "lineupUnconfirmed": True,
             "pitchFitBA": fit_ba,
             "pitchFitCoverage": fit_cov,
+            "coreFitBA": core_fit_ba,
+            "recentFitBA": recent_fit_ba,
+            "recentForm": rf,
+            "zoneScore": zone_score,
+            "zoneGrade": zone_grade,
             "confidence": confidence(h.get("pa"),
                                      (opp_pitcher or {}).get("battersFaced"),
                                      hit["dataQuality"], hr["dataQuality"]),
@@ -761,10 +822,56 @@ def apply_view_scores(all_rows):
         r["viewScore"] = round(zh + zr, 3)
 
 
+def fetch_recent_layer():
+    """One bulk Statcast pull powers DTP components 1-4; the zone cache (5) is
+    loaded from disk (updated by zone_engine.py in the workflow). All
+    best-effort: a failure here degrades to a board without the recent-form
+    layer, never a failed build."""
+    rf_batters, rf_pitchers, rf_df = {}, {}, None
+    try:
+        rf_df = RF.fetch_statcast()
+        rf_batters = RF.batter_form(rf_df)
+        rf_pitchers = RF.pitcher_recent(rf_df)
+        HEALTH["recentFormOk"] = bool(rf_batters)
+    except Exception as e:
+        warn(f"recent-form statcast pull failed ({type(e).__name__}: {e})")
+    zone_cache = None
+    try:
+        zone_cache = Z.load_cache()
+        if zone_cache:
+            HEALTH["zoneCacheOk"] = True
+            HEALTH["zoneCacheAsOf"] = zone_cache.get("asOf")
+        else:
+            warn("zones_cache.json missing -- run zone_engine.py (see --backfill)")
+    except Exception as e:
+        warn(f"zone cache load failed ({type(e).__name__})")
+    return rf_batters, rf_pitchers, rf_df, zone_cache
+
+
+def enrich_probable(pd_dict, pid, rf_pitchers, rf_df):
+    """Attach last-3-start mix, drift/crushed flags, and used zones to a
+    probable-pitcher dict (already a per-game copy, safe to mutate)."""
+    rec = rf_pitchers.get(pid)
+    if not rec:
+        return
+    pd_dict["recentMix"] = rec["mix"]
+    pd_dict["recentStarts"] = rec["starts"]
+    drifts, crushed = RF.mix_drift(rec, pd_dict.get("pitchMix"))
+    pd_dict["mixDrift"] = drifts
+    pd_dict["crushedPitches"] = crushed
+    try:
+        pd_dict["_usedZones"] = sorted(
+            Z.pitcher_used_zones(rf_df, pid, rec.get("gamePks") or []))
+    except Exception:
+        pd_dict["_usedZones"] = []
+
+
 def build_board():
     pool = build_batter_pool()
     savant = fetch_savant_metrics()
     pitch_mix = fetch_pitcher_pitch_mix()
+    rf_batters, rf_pitchers, rf_df, zone_cache = fetch_recent_layer()
+    extras = {"rfBatters": rf_batters, "zoneCache": zone_cache}
     for h in pool:
         h["_savant"] = savant.get(_norm_name(h.get("name")), {})
     league = M.league_rates(pool)
@@ -792,22 +899,29 @@ def build_board():
             hp = dict(hp)  # cached dict -- don't mutate the shared copy
             hp["name"] = home_prob.get("fullName")
             hp["pitchMix"] = pitch_mix.get(_norm_name(hp["name"]))
+            enrich_probable(hp, home_prob.get("id"), rf_pitchers, rf_df)
         if ap and away_prob:
             ap = dict(ap)
             ap["name"] = away_prob.get("fullName")
             ap["pitchMix"] = pitch_mix.get(_norm_name(ap["name"]))
+            enrich_probable(ap, away_prob.get("id"), rf_pitchers, rf_df)
 
         ctx = {"park": park, "weather": {}}  # weather omitted in v1; model treats temp=None safely
 
-        home_hitters = project_side(by_team.get(home_abbr, []), ap, ctx, league, calibration)
-        away_hitters = project_side(by_team.get(away_abbr, []), hp, ctx, league, calibration)
+        home_hitters = project_side(by_team.get(home_abbr, []), ap, ctx, league, calibration, extras)
+        away_hitters = project_side(by_team.get(away_abbr, []), hp, ctx, league, calibration, extras)
 
         def slim_probable(pd):
             if not pd:
                 return None
             return {"name": pd["name"], "hand": pd.get("hand"), "whip": pd.get("whip"),
                     "hrPer9": pd.get("hrPer9"), "kPct": pd.get("kPct"),
-                    "pitchMix": pd.get("pitchMix")}
+                    "pitchMix": pd.get("pitchMix"),
+                    "recentMix": pd.get("recentMix"),
+                    "recentStarts": pd.get("recentStarts"),
+                    "mixDrift": pd.get("mixDrift"),
+                    "crushedPitches": pd.get("crushedPitches"),
+                    "usedZones": pd.get("_usedZones")}
 
         # topHitTargets/topHrTargets/topOverall are gone: no client read them
         # and they tripled the payload with duplicate player objects. Clients
@@ -838,6 +952,7 @@ def build_board():
 
     return {
         "schemaVersion": BOARD_SCHEMA_VERSION,
+        "modelVersion": M.MODEL_VERSION,
         "builtAt": TODAY,
         "builtTs": datetime.datetime.now(ET).isoformat(),
         "gamesCount": len(merged),
