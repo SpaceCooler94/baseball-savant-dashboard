@@ -60,11 +60,27 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from zoneinfo import ZoneInfo
 
+import warnings
+
+# pybaseball currently triggers pandas FutureWarnings on every statcast chunk;
+# they flood the Actions log without saying anything actionable. Silence that
+# category only -- real warnings from our own code still surface via warn().
+warnings.filterwarnings("ignore", category=FutureWarning)
+
 import requests
 
 import mlb_model as M
 import recent_form as RF
 import zone_engine as Z
+
+# FAIL FAST on model/build version skew. This build script (schema 5.5)
+# requires mlb_model >= v5.4 (MODEL_VERSION constant + rawPerGame in the
+# projection output). Running it against an older model file dies mid-build
+# with an opaque KeyError -- catch it here with a message that names the fix.
+if not hasattr(M, "MODEL_VERSION"):
+    sys.exit("FATAL: mlb_model.py is pre-v5.4 (no MODEL_VERSION). This build "
+             "script needs the v5.4+ model -- commit the current mlb_model.py "
+             "to the repo alongside build_daily_board.py.")
 
 # ------------------------------ configuration -------------------------------
 
