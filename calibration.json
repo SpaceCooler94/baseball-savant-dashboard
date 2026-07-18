@@ -1,0 +1,14 @@
+{
+ "modelVersion": "log5-v5.4",
+ "fitDate": "2026-07-18",
+ "reports": {
+  "hit": {
+   "n": 0,
+   "verdict": "identity: only 0 rows (< 2000)"
+  },
+  "hr": {
+   "n": 0,
+   "verdict": "identity: only 0 rows (< 2000)"
+  }
+ }
+}
