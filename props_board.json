@@ -1,0 +1,22 @@
+{
+ "date": "2026-07-21",
+ "model": "hrhit-1.0",
+ "sims": {
+  "hr": 10000,
+  "hit": 25000
+ },
+ "league": {
+  "hr_bbe": 0.0457,
+  "barrel": 0.0797,
+  "pullair": 0.1199,
+  "hard": 0.3917,
+  "p_hr_barrel": 0.4803,
+  "bbe_pa": 0.6721,
+  "k_pa": 0.2211,
+  "bb_pa": 0.1011,
+  "xba_con": 0.321,
+  "ld": 0.2376,
+  "ba_con": 0.3204
+ },
+ "players": []
+}
