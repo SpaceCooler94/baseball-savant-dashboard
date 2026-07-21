@@ -6,17 +6,17 @@
   "hit": 25000
  },
  "league": {
-  "hr_bbe": 0.0457,
-  "barrel": 0.0797,
-  "pullair": 0.1199,
-  "hard": 0.3917,
-  "p_hr_barrel": 0.4803,
-  "bbe_pa": 0.6721,
+  "hr_bbe": 0.0459,
+  "barrel": 0.0798,
+  "pullair": 0.12,
+  "hard": 0.3918,
+  "p_hr_barrel": 0.4817,
+  "bbe_pa": 0.6722,
   "k_pa": 0.2211,
-  "bb_pa": 0.1011,
-  "xba_con": 0.321,
-  "ld": 0.2376,
-  "ba_con": 0.3204
+  "bb_pa": 0.1009,
+  "xba_con": 0.3209,
+  "ld": 0.2375,
+  "ba_con": 0.3208
  },
  "players": []
 }

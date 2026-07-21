@@ -162,7 +162,7 @@
    "venue": "Coors Field",
    "probables": {
     "home": 547179,
-    "away": 571945
+    "away": 687223
    },
    "lineups": {
     "home": [],
@@ -189,7 +189,7 @@
    "away": "ATH",
    "venue": "Chase Field",
    "probables": {
-    "home": null,
+    "home": 684442,
     "away": 678022
    },
    "lineups": {
