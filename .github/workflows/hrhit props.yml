@@ -1,0 +1,33 @@
+name: hrhit-props
+on:
+  schedule:
+    - cron: "0 15 * * *"   # 11am ET — lineups mostly posted; add a 2nd run at 21:00 UTC if you want late lineups
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install pandas numpy pyarrow requests pybaseball
+      - name: Restore statcast cache
+        uses: actions/cache@v4
+        with:
+          path: data/statcast_2026.parquet
+          key: statcast-2026-${{ github.run_id }}
+          restore-keys: statcast-2026-
+      - run: python hrhit_data.py
+      - run: python hrhit_model.py
+      - name: Commit board
+        run: |
+          git config user.name "hrhit-bot"
+          git config user.email "bot@users.noreply.github.com"
+          mkdir -p boards && cp props_board.json boards/props_$(date +%F).json
+          git add -A
+          git diff --cached --quiet || git commit -m "board $(date +%F)"
+          git push
