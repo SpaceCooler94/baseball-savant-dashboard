@@ -8,17 +8,31 @@
 # actually happened. calibrate.py fits on these rows; later, odds can be joined
 # onto the same rows for ROI/CLV tracking.
 #
+# SIM JOIN (added): if boards/props_YYYY-MM-DD.json exists for the same date,
+# the hrhit Monte Carlo probabilities are stamped onto the SAME row as extra
+# fields (simHitRaw / simHrRaw / simModelVersion). They are NOT separate rows:
+# calibrate.py dedupes on (date, hitterId), so a second row per hitter would
+# silently clobber the log5 row. One row, one outcome, two predictions.
+#
 # DESIGN RULES (do not relax casually):
 #   - VOID RULE: hitters with 0 actual PA are excluded (counted, not settled).
 #     A scratch is not a model miss, and sportsbooks void those props too --
-#     the ledger mirrors settlement reality.
+#     the ledger mirrors settlement reality. Sim fields inherit this for free.
 #   - RAW ONLY: predictions recorded are hitRawPerGame/hrRawPerGame (pre-
 #     calibration). Fitting on calibrated outputs is a feedback loop. For 5.3
 #     boards (no rawPerGame field) it is reconstructed from inputs.rawPerPA +
 #     expectedPA -- identical math, since 5.3 calibration was never applied.
+#     Sim rows follow the same rule: pHRraw/pHitRaw preferred, falling back to
+#     pHR/pHit for boards built before hrhit learned to self-calibrate.
+#   - SIM STALENESS GUARD: a props board whose own "date" != the settle date is
+#     ignored entirely. A stale board (cron ran before lineups posted, so the
+#     file still holds an older slate) would otherwise pair yesterday's
+#     predictions with today's outcomes -- worse than no data at all.
 #   - IDEMPOTENT: a date already in ledger/settled_dates.json is skipped, so
 #     re-runs and workflow retries can't double-write rows.
-#   - Rows carry modelVersion from the board; the fit filters on it.
+#   - Rows carry modelVersion from the board; the fit filters on it. Sim rows
+#     carry simModelVersion SEPARATELY so a log5 bump doesn't discard sim
+#     history (and vice versa).
 #
 # Usage: python settle.py [YYYY-MM-DD]   (default: yesterday, US/Eastern)
 # Exit codes: 0 = settled or cleanly skipped; 1 = hard failure.
@@ -42,7 +56,7 @@ LEDGER_PATH = os.path.join(LEDGER_DIR, "ledger.jsonl")
 SETTLED_PATH = os.path.join(LEDGER_DIR, "settled_dates.json")
 
 SESSION = requests.Session()
-SESSION.headers.update({"User-Agent": "mlb-daily-board-settle/1.0 (personal analytics pipeline)"})
+SESSION.headers.update({"User-Agent": "mlb-daily-board-settle/1.1 (personal analytics pipeline)"})
 
 
 def http_json(url, tries=3, timeout=20):
@@ -112,11 +126,50 @@ def raw_per_game(row, market):
     return round(1 - (1 - max(0.001, min(0.999, raw_pa))) ** n, 3)
 
 
-def settle_rows(board, outcomes_by_game, date_str):
-    """Board + parsed boxscores -> (ledger_rows, stats dict)."""
+def load_sim_board(date_str, boards_dir=BOARDS_DIR):
+    """Archived hrhit props board for date_str -> ({hitterId: player}, version).
+    Returns ({}, None) when absent, unreadable, empty, or -- critically -- when
+    the board's own date does not match: a stale props_*.json from a run that
+    fired before lineups posted must never be paired with today's outcomes."""
+    path = os.path.join(boards_dir, f"props_{date_str}.json")
+    if not os.path.exists(path):
+        return {}, None
+    try:
+        with open(path) as f:
+            board = json.load(f)
+    except (json.JSONDecodeError, OSError):
+        print(f"WARN: unreadable sim board {path}", file=sys.stderr)
+        return {}, None
+    if board.get("date") != date_str:
+        print(f"WARN: sim board date {board.get('date')} != {date_str} -- ignoring (stale)",
+              file=sys.stderr)
+        return {}, None
+    by_id = {}
+    for p in board.get("players") or []:
+        pid = p.get("id")
+        if pid is not None:
+            by_id[int(pid)] = p
+    return by_id, board.get("model")
+
+
+def sim_raw(player, market):
+    """Raw (pre-calibration) sim probability. hrhit >= 1.1 publishes pHRraw /
+    pHitRaw alongside the calibrated pHR / pHit; older boards only have the
+    latter, which were uncalibrated anyway, so the fallback is exact."""
+    pub, raw = ("pHR", "pHRraw") if market == "hr" else ("pHit", "pHitRaw")
+    v = player.get(raw)
+    if v is None:
+        v = player.get(pub)
+    return nv(v)
+
+
+def settle_rows(board, outcomes_by_game, date_str, sim_by_id=None, sim_version=None):
+    """Board + parsed boxscores (+ optional sim board) -> (ledger_rows, stats)."""
     rows = []
     voided = 0
     missing_pred = 0
+    sim_matched = 0
+    sim_by_id = sim_by_id or {}
     model_version = board.get("modelVersion") or ("schema-%s" % board.get("schemaVersion"))
     for g in board.get("games", []):
         game_id = g.get("gameId")
@@ -132,7 +185,7 @@ def settle_rows(board, outcomes_by_game, date_str):
             if hit_raw is None or hr_raw is None:
                 missing_pred += 1
                 continue
-            rows.append({
+            row = {
                 "date": date_str,
                 "gameId": game_id,
                 "hitterId": pid,
@@ -155,9 +208,21 @@ def settle_rows(board, outcomes_by_game, date_str):
                 "angles": [a.get("key") for a in (r.get("angles") or []) if a.get("key")],
                 "profile": (r.get("recentForm") or {}).get("profile"),
                 "zoneScore": r.get("zoneScore"),
-            })
+            }
+            # --- sim join: same row, same outcome, second prediction source ---
+            sp = sim_by_id.get(pid)
+            if sp:
+                s_hit = sim_raw(sp, "hit")
+                s_hr = sim_raw(sp, "hr")
+                if s_hit is not None and s_hr is not None:
+                    row["simHitRaw"] = s_hit
+                    row["simHrRaw"] = s_hr
+                    row["simModelVersion"] = sim_version
+                    sim_matched += 1
+            rows.append(row)
     return rows, {"settled": len(rows), "voided": voided, "missingPred": missing_pred,
-                  "modelVersion": model_version}
+                  "simMatched": sim_matched, "modelVersion": model_version,
+                  "simVersion": sim_version}
 
 
 # --------------------------------- job glue ----------------------------------
@@ -192,6 +257,12 @@ def main():
     with open(board_path) as f:
         board = json.load(f)
 
+    sim_by_id, sim_version = load_sim_board(date_str)
+    if sim_by_id:
+        print(f"Sim board: {len(sim_by_id)} hitters, model={sim_version}")
+    else:
+        print("Sim board: none for this date (log5 rows only)")
+
     outcomes_by_game = {}
     failures = 0
     for g in board.get("games", []):
@@ -210,7 +281,7 @@ def main():
               file=sys.stderr)
         sys.exit(1)
 
-    rows, stats = settle_rows(board, outcomes_by_game, date_str)
+    rows, stats = settle_rows(board, outcomes_by_game, date_str, sim_by_id, sim_version)
 
     os.makedirs(LEDGER_DIR, exist_ok=True)
     with open(LEDGER_PATH, "a") as f:
@@ -226,8 +297,8 @@ def main():
         mark_settled(settled)
 
     print(f"Settled {date_str}: {stats['settled']} rows, {stats['voided']} voided (0 PA), "
-          f"{stats['missingPred']} missing predictions, {failures} boxscore failures, "
-          f"model={stats['modelVersion']}")
+          f"{stats['missingPred']} missing predictions, {stats['simMatched']} with sim, "
+          f"{failures} boxscore failures, model={stats['modelVersion']}")
 
 
 if __name__ == "__main__":
