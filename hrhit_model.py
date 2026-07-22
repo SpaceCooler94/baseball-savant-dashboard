@@ -22,12 +22,12 @@ Reads  data/statcast_2026.parquet, data/slate.json, data/names.json
 Writes props_board.json
 """
 
-import json, hashlib
+import json, hashlib, math
 from pathlib import Path
 import numpy as np
 import pandas as pd
 
-MODEL_VERSION = "hrhit-1.0"
+MODEL_VERSION = "hrhit-1.1"   # 1.1: publishes pHRraw/pHitRaw + consumes calibration.json
 N_SIMS_HR, N_SIMS_HIT = 10_000, 25_000
 HALF_LIFE_DAYS = 21           # hit-model recency decay
 K_BBE = 60                    # EB pseudo-BBE for power rates
@@ -49,6 +49,7 @@ PARK_H = {"COL":110,"BOS":106,"KC":104,"CIN":102,"ARI":102,"MIA":101,"PIT":101,
  "LAD":96,"CWS":96,"TB":96,"NYY":95,"MIL":95,"SF":94,"SEA":92}
 
 D = Path("data")
+CAL = {}          # populated in main() from calibration.json; {} == identity
 
 def shrink(x, n, prior, k):
     return (x * n + prior * k) / (n + k)
@@ -146,6 +147,31 @@ def log5(b, p, lg):
     num = b * p / lg
     return num / (num + (1 - b) * (1 - p) / (1 - lg))
 
+def load_calibration():
+    """calibration.json's simHit/simHr blocks, written by calibrate.py once the
+    sim markets clear their gates. Missing file or missing block => identity,
+    which is the correct default: an unfit market must publish raw."""
+    try:
+        c = json.loads(Path("calibration.json").read_text())
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}, None
+    if c.get("simModelVersion") != MODEL_VERSION:
+        return {}, c.get("simModelVersion")   # fit belongs to different sim math
+    out = {}
+    for key, market in (("simHr", "hr"), ("simHit", "hit")):
+        blk = c.get(key)
+        if blk and blk.get("scale") is not None:
+            out[market] = (float(blk["scale"]), float(blk.get("offset", 0.0)))
+    return out, c.get("simModelVersion")
+
+def apply_cal(p, params):
+    if not params:
+        return p
+    a, b = params
+    p = min(1 - 1e-6, max(1e-6, p))
+    z = a * math.log(p / (1 - p)) + b
+    return 1 / (1 + math.exp(-z)) if z >= 0 else math.exp(z) / (1 + math.exp(z))
+
 def seed_for(day, pid):
     return int(hashlib.sha256(f"{day}:{pid}:{MODEL_VERSION}".encode()).hexdigest()[:8], 16)
 
@@ -155,6 +181,9 @@ def sim_atleast1(p_event, exp_n, n_sims, rng):
     return float((rng.binomial(n, p_event) >= 1).mean())
 
 def main():
+    global CAL
+    CAL, cal_ver = load_calibration()
+    print(f"calibration: {'+'.join(sorted(CAL)) or 'identity'} (fit for {cal_ver})")
     df = load()
     slate = json.loads((D / "slate.json").read_text())
     names = json.loads((D / "names.json").read_text())
@@ -201,12 +230,18 @@ def main():
 
                 rng_hr  = np.random.default_rng(seed_for(slate["date"], f"hr{bid}"))
                 rng_hit = np.random.default_rng(seed_for(slate["date"], f"h{bid}"))
+                raw_hr  = sim_atleast1(p_hr_pa, exp_pa, N_SIMS_HR, rng_hr)
+                raw_hit = sim_atleast1(p_hit_ab, exp_ab, N_SIMS_HIT, rng_hit)
                 rows.append({
                     "id": bid, "name": names.get(str(bid), str(bid)),
                     "team": gm[side], "opp": gm["away" if side == "home" else "home"],
                     "sp": names.get(str(opp_sp), "?"), "slot": slot + 1, "park": park,
-                    "pHR": round(sim_atleast1(p_hr_pa, exp_pa, N_SIMS_HR, rng_hr), 4),
-                    "pHit": round(sim_atleast1(p_hit_ab, exp_ab, N_SIMS_HIT, rng_hit), 4),
+                    # pHR/pHit are as-published (calibrated once the fit lands);
+                    # *raw are pre-calibration and are what settle.py ledgers.
+                    "pHR": round(apply_cal(raw_hr, CAL.get("hr")), 4),
+                    "pHit": round(apply_cal(raw_hit, CAL.get("hit")), 4),
+                    "pHRraw": round(raw_hr, 4),
+                    "pHitRaw": round(raw_hit, 4),
                     "hr_detail": {"hrBBE": round(B["hr_bbe"], 4), "barrel": round(B["barrel"], 3),
                                   "pullAir": round(B["pullair"], 3), "hard": round(B["hard"], 3),
                                   "mPit": round(float(m_pit), 3), "parkPF": PARK_HR.get(park, 100),
@@ -218,6 +253,7 @@ def main():
 
     rows.sort(key=lambda r: -r["pHR"])
     board = {"date": slate["date"], "model": MODEL_VERSION,
+             "calibrationApplied": sorted(CAL) or None,
              "sims": {"hr": N_SIMS_HR, "hit": N_SIMS_HIT},
              "league": {k: round(v, 4) for k, v in lg.items()},
              "players": rows}
