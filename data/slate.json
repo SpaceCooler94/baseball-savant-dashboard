@@ -1,85 +1,51 @@
 {
- "date": "2026-07-21",
+ "date": "2026-07-22",
  "games": [
   {
-   "gamePk": 824409,
-   "home": "CLE",
-   "away": "MIN",
-   "venue": "Progressive Field",
+   "gamePk": 823518,
+   "home": "NYY",
+   "away": "PIT",
+   "venue": "Yankee Stadium",
    "probables": {
-    "home": 800048,
-    "away": 696070
+    "home": 543037,
+    "away": 656605
    },
    "lineups": {
     "home": [
-     680757,
-     677587,
-     800050,
-     656555,
-     681807,
-     683953,
-     672356,
-     595978,
-     690984
-    ],
-    "away": []
-   }
-  },
-  {
-   "gamePk": 823437,
-   "home": "PHI",
-   "away": "LAD",
-   "venue": "Citizens Bank Park",
-   "probables": {
-    "home": 554430,
-    "away": 680736
-   },
-   "lineups": {
-    "home": [
-     607208,
-     656941,
-     547180,
-     664761,
-     624641,
-     592663,
-     669016,
-     656537,
-     681082
+     663757,
+     700250,
+     682987,
+     641355,
+     691176,
+     665862,
+     676609,
+     641857,
+     669224
     ],
     "away": [
-     660271,
-     681624,
-     518692,
-     571970,
-     605141,
-     663656,
-     669242,
-     669743,
-     672613
+     663968,
+     664040,
+     668804,
+     699013,
+     656811,
+     693304,
+     694378,
+     680779,
+     682997
     ]
    }
   },
   {
-   "gamePk": 822787,
-   "home": "TOR",
-   "away": "TB",
-   "venue": "Rogers Centre",
+   "gamePk": 823519,
+   "home": "NYY",
+   "away": "PIT",
+   "venue": "Yankee Stadium",
    "probables": {
-    "home": 592332,
-    "away": 656876
+    "home": 608331,
+    "away": 696149
    },
    "lineups": {
-    "home": [
-     664770,
-     665489,
-     676391,
-     543807,
-     662139,
-     672960,
-     678218,
-     665926,
-     682729
-    ],
+    "home": [],
     "away": []
    }
   },
@@ -89,7 +55,41 @@
    "away": "BAL",
    "venue": "Fenway Park",
    "probables": {
-    "home": 700842,
+    "home": 687562,
+    "away": 665152
+   },
+   "lineups": {
+    "home": [
+     807799,
+     678882,
+     677800,
+     575929,
+     702332,
+     663853,
+     680776,
+     657136,
+     691907
+    ],
+    "away": [
+     621493,
+     624413,
+     683002,
+     641933,
+     691723,
+     665750,
+     687952,
+     702616,
+     669087
+    ]
+   }
+  },
+  {
+   "gamePk": 824732,
+   "home": "BOS",
+   "away": "BAL",
+   "venue": "Fenway Park",
+   "probables": {
+    "home": null,
     "away": 680694
    },
    "lineups": {
@@ -98,107 +98,71 @@
    }
   },
   {
-   "gamePk": 824895,
-   "home": "ATL",
-   "away": "SD",
-   "venue": "Truist Park",
-   "probables": {
-    "home": 625643,
-    "away": 621111
-   },
-   "lineups": {
-    "home": [],
-    "away": []
-   }
-  },
-  {
-   "gamePk": 824085,
+   "gamePk": 824083,
    "home": "KC",
    "away": "SF",
    "venue": "Kauffman Stadium",
    "probables": {
-    "home": 679883,
-    "away": 641816
+    "home": 607625,
+    "away": 694738
    },
    "lineups": {
     "home": [
      695600,
      657041,
-     695506,
-     521692,
      686469,
-     516782,
+     521692,
      686681,
-     679845,
-     686475
+     686555,
+     516782,
+     668942,
+     623205
+    ],
+    "away": [
+     650333,
+     805811,
+     671218,
+     646240,
+     669477,
+     808982,
+     642715,
+     687551,
+     701852
+    ]
+   }
+  },
+  {
+   "gamePk": 823761,
+   "home": "MIL",
+   "away": "NYM",
+   "venue": "American Family Field",
+   "probables": {
+    "home": 701656,
+    "away": 681035
+   },
+   "lineups": {
+    "home": [
+     592885,
+     694192,
+     668930,
+     661388,
+     669003,
+     683734,
+     641343,
+     806198,
+     687401
     ],
     "away": []
    }
   },
   {
-   "gamePk": 823760,
-   "home": "MIL",
-   "away": "NYM",
-   "venue": "American Family Field",
-   "probables": {
-    "home": 687075,
-    "away": 804267
-   },
-   "lineups": {
-    "home": [],
-    "away": []
-   }
-  },
-  {
-   "gamePk": 824652,
-   "home": "CHC",
-   "away": "DET",
-   "venue": "Wrigley Field",
-   "probables": {
-    "home": 656849,
-    "away": 664285
-   },
-   "lineups": {
-    "home": [],
-    "away": []
-   }
-  },
-  {
-   "gamePk": 822871,
-   "home": "TEX",
-   "away": "CWS",
-   "venue": "Globe Life Field",
-   "probables": {
-    "home": 677958,
-    "away": 702273
-   },
-   "lineups": {
-    "home": [],
-    "away": []
-   }
-  },
-  {
-   "gamePk": 824165,
-   "home": "HOU",
-   "away": "MIA",
-   "venue": "Daikin Park",
-   "probables": {
-    "home": 837227,
-    "away": 663969
-   },
-   "lineups": {
-    "home": [],
-    "away": []
-   }
-  },
-  {
-   "gamePk": 824329,
+   "gamePk": 824327,
    "home": "COL",
    "away": "WSH",
    "venue": "Coors Field",
    "probables": {
-    "home": 547179,
-    "away": 687223
+    "home": 687312,
+    "away": 676917
    },
    "lineups": {
     "home": [],
@@ -206,27 +170,13 @@
    }
   },
   {
-   "gamePk": 824005,
-   "home": "LAA",
-   "away": "STL",
-   "venue": "Angel Stadium",
-   "probables": {
-    "home": 700712,
-    "away": 669461
-   },
-   "lineups": {
-    "home": [],
-    "away": []
-   }
-  },
-  {
-   "gamePk": 825056,
+   "gamePk": 825055,
    "home": "AZ",
    "away": "ATH",
    "venue": "Chase Field",
    "probables": {
-    "home": 684442,
-    "away": 678022
+    "home": 518876,
+    "away": 695611
    },
    "lineups": {
     "home": [],
@@ -234,13 +184,13 @@
    }
   },
   {
-   "gamePk": 823114,
+   "gamePk": 823110,
    "home": "SEA",
    "away": "CIN",
    "venue": "T-Mobile Park",
    "probables": {
-    "home": 622491,
-    "away": 695505
+    "home": 676106,
+    "away": 663903
    },
    "lineups": {
     "home": [],
@@ -248,13 +198,111 @@
    }
   },
   {
-   "gamePk": 823519,
-   "home": "NYY",
-   "away": "PIT",
-   "venue": "Yankee Stadium",
+   "gamePk": 824004,
+   "home": "LAA",
+   "away": "STL",
+   "venue": "Angel Stadium",
    "probables": {
-    "home": 701542,
-    "away": 696149
+    "home": 672282,
+    "away": 690928
+   },
+   "lineups": {
+    "home": [],
+    "away": []
+   }
+  },
+  {
+   "gamePk": 824408,
+   "home": "CLE",
+   "away": "MIN",
+   "venue": "Progressive Field",
+   "probables": {
+    "home": 677944,
+    "away": 641927
+   },
+   "lineups": {
+    "home": [],
+    "away": []
+   }
+  },
+  {
+   "gamePk": 823438,
+   "home": "PHI",
+   "away": "LAD",
+   "venue": "Citizens Bank Park",
+   "probables": {
+    "home": 605400,
+    "away": 641778
+   },
+   "lineups": {
+    "home": [],
+    "away": []
+   }
+  },
+  {
+   "gamePk": 822784,
+   "home": "TOR",
+   "away": "TB",
+   "venue": "Rogers Centre",
+   "probables": {
+    "home": 680755,
+    "away": 643377
+   },
+   "lineups": {
+    "home": [],
+    "away": []
+   }
+  },
+  {
+   "gamePk": 824896,
+   "home": "ATL",
+   "away": "SD",
+   "venue": "Truist Park",
+   "probables": {
+    "home": 527048,
+    "away": 650633
+   },
+   "lineups": {
+    "home": [],
+    "away": []
+   }
+  },
+  {
+   "gamePk": 822873,
+   "home": "TEX",
+   "away": "CWS",
+   "venue": "Globe Life Field",
+   "probables": {
+    "home": 641302,
+    "away": 641743
+   },
+   "lineups": {
+    "home": [],
+    "away": []
+   }
+  },
+  {
+   "gamePk": 824650,
+   "home": "CHC",
+   "away": "DET",
+   "venue": "Wrigley Field",
+   "probables": {
+    "home": 607067,
+    "away": 672456
+   },
+   "lineups": {
+    "home": [],
+    "away": []
+   }
+  },
+  {
+   "gamePk": 824166,
+   "home": "HOU",
+   "away": "MIA",
+   "venue": "Daikin Park",
+   "probables": {
+    "home": 663567,
+    "away": 645261
    },
    "lineups": {
     "home": [],
