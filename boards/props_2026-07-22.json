@@ -398,6 +398,35 @@
    }
   },
   {
+   "id": 682626,
+   "name": "Francisco Alvarez",
+   "team": "NYM",
+   "opp": "MIL",
+   "sp": "Logan Henderson",
+   "slot": 9,
+   "park": "MIL",
+   "pHR": 0.1601,
+   "pHit": 0.6376,
+   "pHRraw": 0.1601,
+   "pHitRaw": 0.6376,
+   "hr_detail": {
+    "hrBBE": 0.0637,
+    "barrel": 0.138,
+    "pullAir": 0.112,
+    "hard": 0.424,
+    "mPit": 0.961,
+    "parkPF": 109,
+    "pHRperPA": 0.0418
+   },
+   "hit_detail": {
+    "xbaCon": 0.33,
+    "ld": 0.233,
+    "kAB": 0.283,
+    "pHitAB": 0.293,
+    "expAB": 3.46
+   }
+  },
+  {
    "id": 641343,
    "name": "Jake Bauers",
    "team": "MIL",
@@ -424,6 +453,35 @@
     "kAB": 0.314,
     "pHitAB": 0.318,
     "expAB": 3.52
+   }
+  },
+  {
+   "id": 596019,
+   "name": "Francisco Lindor",
+   "team": "NYM",
+   "opp": "MIL",
+   "sp": "Logan Henderson",
+   "slot": 2,
+   "park": "MIL",
+   "pHR": 0.1555,
+   "pHit": 0.7617,
+   "pHRraw": 0.1555,
+   "pHitRaw": 0.7617,
+   "hr_detail": {
+    "hrBBE": 0.0438,
+    "barrel": 0.089,
+    "pullAir": 0.141,
+    "hard": 0.462,
+    "mPit": 0.961,
+    "parkPF": 109,
+    "pHRperPA": 0.033
+   },
+   "hit_detail": {
+    "xbaCon": 0.318,
+    "ld": 0.238,
+    "kAB": 0.236,
+    "pHitAB": 0.303,
+    "expAB": 4.08
    }
   },
   {
@@ -540,6 +598,35 @@
     "kAB": 0.214,
     "pHitAB": 0.35,
     "expAB": 3.88
+   }
+  },
+  {
+   "id": 676724,
+   "name": "Jared Young",
+   "team": "NYM",
+   "opp": "MIL",
+   "sp": "Logan Henderson",
+   "slot": 6,
+   "park": "MIL",
+   "pHR": 0.1394,
+   "pHit": 0.7548,
+   "pHRraw": 0.1394,
+   "pHitRaw": 0.7548,
+   "hr_detail": {
+    "hrBBE": 0.0545,
+    "barrel": 0.099,
+    "pullAir": 0.152,
+    "hard": 0.438,
+    "mPit": 0.961,
+    "parkPF": 109,
+    "pHRperPA": 0.0388
+   },
+   "hit_detail": {
+    "xbaCon": 0.317,
+    "ld": 0.249,
+    "kAB": 0.243,
+    "pHitAB": 0.303,
+    "expAB": 3.71
    }
   },
   {
@@ -746,6 +833,35 @@
    }
   },
   {
+   "id": 805999,
+   "name": "A.J. Ewing",
+   "team": "NYM",
+   "opp": "MIL",
+   "sp": "Logan Henderson",
+   "slot": 1,
+   "park": "MIL",
+   "pHR": 0.1162,
+   "pHit": 0.7414,
+   "pHRraw": 0.1162,
+   "pHitRaw": 0.7414,
+   "hr_detail": {
+    "hrBBE": 0.0454,
+    "barrel": 0.073,
+    "pullAir": 0.094,
+    "hard": 0.416,
+    "mPit": 0.961,
+    "parkPF": 109,
+    "pHRperPA": 0.0248
+   },
+   "hit_detail": {
+    "xbaCon": 0.332,
+    "ld": 0.225,
+    "kAB": 0.285,
+    "pHitAB": 0.292,
+    "expAB": 4.2
+   }
+  },
+  {
    "id": 691723,
    "name": "Coby Mayo",
    "team": "BAL",
@@ -920,6 +1036,35 @@
    }
   },
   {
+   "id": 543760,
+   "name": "Marcus Semien",
+   "team": "NYM",
+   "opp": "MIL",
+   "sp": "Logan Henderson",
+   "slot": 7,
+   "park": "MIL",
+   "pHR": 0.1075,
+   "pHit": 0.732,
+   "pHRraw": 0.1075,
+   "pHitRaw": 0.732,
+   "hr_detail": {
+    "hrBBE": 0.0404,
+    "barrel": 0.078,
+    "pullAir": 0.159,
+    "hard": 0.363,
+    "mPit": 0.961,
+    "parkPF": 109,
+    "pHRperPA": 0.0292
+   },
+   "hit_detail": {
+    "xbaCon": 0.315,
+    "ld": 0.233,
+    "kAB": 0.279,
+    "pHitAB": 0.282,
+    "expAB": 3.69
+   }
+  },
+  {
    "id": 682987,
    "name": "Spencer Jones",
    "team": "NYY",
@@ -1091,6 +1236,35 @@
     "kAB": 0.274,
     "pHitAB": 0.31,
     "expAB": 4.02
+   }
+  },
+  {
+   "id": 701807,
+   "name": "Carson Benge",
+   "team": "NYM",
+   "opp": "MIL",
+   "sp": "Logan Henderson",
+   "slot": 4,
+   "park": "MIL",
+   "pHR": 0.0921,
+   "pHit": 0.7816,
+   "pHRraw": 0.0921,
+   "pHitRaw": 0.7816,
+   "hr_detail": {
+    "hrBBE": 0.0405,
+    "barrel": 0.076,
+    "pullAir": 0.089,
+    "hard": 0.407,
+    "mPit": 0.961,
+    "parkPF": 109,
+    "pHRperPA": 0.0246
+   },
+   "hit_detail": {
+    "xbaCon": 0.347,
+    "ld": 0.239,
+    "kAB": 0.257,
+    "pHitAB": 0.322,
+    "expAB": 3.94
    }
   },
   {
@@ -1297,6 +1471,35 @@
    }
   },
   {
+   "id": 666182,
+   "name": "Bo Bichette",
+   "team": "NYM",
+   "opp": "MIL",
+   "sp": "Logan Henderson",
+   "slot": 3,
+   "park": "MIL",
+   "pHR": 0.0828,
+   "pHit": 0.787,
+   "pHRraw": 0.0828,
+   "pHitRaw": 0.787,
+   "hr_detail": {
+    "hrBBE": 0.033,
+    "barrel": 0.069,
+    "pullAir": 0.07,
+    "hard": 0.425,
+    "mPit": 0.961,
+    "parkPF": 109,
+    "pHRperPA": 0.0215
+   },
+   "hit_detail": {
+    "xbaCon": 0.332,
+    "ld": 0.267,
+    "kAB": 0.234,
+    "pHitAB": 0.327,
+    "expAB": 4.03
+   }
+  },
+  {
    "id": 669087,
    "name": "Sam Huff",
    "team": "BAL",
@@ -1326,6 +1529,35 @@
    }
   },
   {
+   "id": 593871,
+   "name": "Jorge Polanco",
+   "team": "NYM",
+   "opp": "MIL",
+   "sp": "Logan Henderson",
+   "slot": 5,
+   "park": "MIL",
+   "pHR": 0.0794,
+   "pHit": 0.7288,
+   "pHRraw": 0.0794,
+   "pHitRaw": 0.7288,
+   "hr_detail": {
+    "hrBBE": 0.03,
+    "barrel": 0.054,
+    "pullAir": 0.138,
+    "hard": 0.332,
+    "mPit": 0.961,
+    "parkPF": 109,
+    "pHRperPA": 0.0203
+   },
+   "hit_detail": {
+    "xbaCon": 0.306,
+    "ld": 0.234,
+    "kAB": 0.256,
+    "pHitAB": 0.283,
+    "expAB": 3.86
+   }
+  },
+  {
    "id": 657136,
    "name": "Connor Wong",
    "team": "BOS",
@@ -1352,6 +1584,35 @@
     "kAB": 0.249,
     "pHitAB": 0.319,
     "expAB": 3.5
+   }
+  },
+  {
+   "id": 683146,
+   "name": "Brett Baty",
+   "team": "NYM",
+   "opp": "MIL",
+   "sp": "Logan Henderson",
+   "slot": 8,
+   "park": "MIL",
+   "pHR": 0.0765,
+   "pHit": 0.7554,
+   "pHRraw": 0.0765,
+   "pHitRaw": 0.7554,
+   "hr_detail": {
+    "hrBBE": 0.0282,
+    "barrel": 0.083,
+    "pullAir": 0.081,
+    "hard": 0.391,
+    "mPit": 0.961,
+    "parkPF": 109,
+    "pHRperPA": 0.0193
+   },
+   "hit_detail": {
+    "xbaCon": 0.328,
+    "ld": 0.245,
+    "kAB": 0.275,
+    "pHitAB": 0.299,
+    "expAB": 3.57
    }
   },
   {
