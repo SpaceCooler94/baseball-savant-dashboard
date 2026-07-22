@@ -1,0 +1,47 @@
+name: hrhit-props
+on:
+  schedule:
+    - cron: "0 15 * * *"   # 11am ET -- day-game lineups
+    - cron: "0 20 * * *"   # 4pm ET  -- night-slate lineups (this is the one that matters)
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+# Never let two hrhit runs overlap; the later one wins.
+concurrency:
+  group: hrhit-props
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install pandas numpy pyarrow requests pybaseball
+      - name: Restore statcast cache
+        uses: actions/cache@v4
+        with:
+          path: data/statcast_2026.parquet
+          key: statcast-2026-${{ github.run_id }}
+          restore-keys: statcast-2026-
+      - run: python hrhit_data.py
+      # calibration.json is committed by daily_board.yml; hrhit_model reads it
+      # if present and applies simHr/simHit, else publishes raw (identity).
+      - run: python hrhit_model.py
+      - name: Commit board
+        run: |
+          git config user.name "hrhit-bot"
+          git config user.email "bot@users.noreply.github.com"
+          mkdir -p boards && cp props_board.json boards/props_$(date +%F).json
+          git add -A
+          git diff --cached --quiet && exit 0
+          git commit -m "sim board $(date +%F)"
+          # daily_board.yml pushes to the same branch; rebase instead of failing.
+          for i in 1 2 3; do
+            git pull --rebase --autostash origin ${{ github.ref_name }} && git push && exit 0
+            sleep 5
+          done
+          echo "push failed after retries" && exit 1
