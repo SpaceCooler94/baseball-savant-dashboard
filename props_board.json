@@ -50,6 +50,64 @@
    }
   },
   {
+   "id": 691406,
+   "name": "Junior Caminero",
+   "team": "TB",
+   "opp": "TOR",
+   "sp": "Shane Bieber",
+   "slot": 3,
+   "park": "TOR",
+   "pHR": 0.2866,
+   "pHit": 0.879,
+   "pHRraw": 0.2866,
+   "pHitRaw": 0.879,
+   "hr_detail": {
+    "hrBBE": 0.087,
+    "barrel": 0.125,
+    "pullAir": 0.159,
+    "hard": 0.495,
+    "mPit": 1.35,
+    "parkPF": 100,
+    "pHRperPA": 0.0809
+   },
+   "hit_detail": {
+    "xbaCon": 0.353,
+    "ld": 0.232,
+    "kAB": 0.184,
+    "pHitAB": 0.417,
+    "expAB": 3.93
+   }
+  },
+  {
+   "id": 683748,
+   "name": "Victor Mesa Jr.",
+   "team": "TB",
+   "opp": "TOR",
+   "sp": "Shane Bieber",
+   "slot": 4,
+   "park": "TOR",
+   "pHR": 0.2289,
+   "pHit": 0.8454,
+   "pHRraw": 0.2289,
+   "pHitRaw": 0.8454,
+   "hr_detail": {
+    "hrBBE": 0.0779,
+    "barrel": 0.1,
+    "pullAir": 0.146,
+    "hard": 0.388,
+    "mPit": 1.35,
+    "parkPF": 100,
+    "pHRperPA": 0.063
+   },
+   "hit_detail": {
+    "xbaCon": 0.323,
+    "ld": 0.244,
+    "kAB": 0.202,
+    "pHitAB": 0.379,
+    "expAB": 3.9
+   }
+  },
+  {
    "id": 665019,
    "name": "Kody Clemens",
    "team": "MIN",
@@ -105,6 +163,35 @@
     "kAB": 0.262,
     "pHitAB": 0.322,
     "expAB": 3.97
+   }
+  },
+  {
+   "id": 666018,
+   "name": "Jonathan Aranda",
+   "team": "TB",
+   "opp": "TOR",
+   "sp": "Shane Bieber",
+   "slot": 2,
+   "park": "TOR",
+   "pHR": 0.1901,
+   "pHit": 0.8476,
+   "pHRraw": 0.1901,
+   "pHitRaw": 0.8476,
+   "hr_detail": {
+    "hrBBE": 0.0502,
+    "barrel": 0.095,
+    "pullAir": 0.099,
+    "hard": 0.439,
+    "mPit": 1.35,
+    "parkPF": 100,
+    "pHRperPA": 0.0412
+   },
+   "hit_detail": {
+    "xbaCon": 0.323,
+    "ld": 0.258,
+    "kAB": 0.205,
+    "pHitAB": 0.383,
+    "expAB": 4.06
    }
   },
   {
@@ -221,6 +308,35 @@
     "kAB": 0.212,
     "pHitAB": 0.294,
     "expAB": 3.71
+   }
+  },
+  {
+   "id": 650490,
+   "name": "Yandy D\u00edaz",
+   "team": "TB",
+   "opp": "TOR",
+   "sp": "Shane Bieber",
+   "slot": 1,
+   "park": "TOR",
+   "pHR": 0.163,
+   "pHit": 0.8598,
+   "pHRraw": 0.163,
+   "pHitRaw": 0.8598,
+   "hr_detail": {
+    "hrBBE": 0.0441,
+    "barrel": 0.073,
+    "pullAir": 0.064,
+    "hard": 0.462,
+    "mPit": 1.35,
+    "parkPF": 100,
+    "pHRperPA": 0.0359
+   },
+   "hit_detail": {
+    "xbaCon": 0.326,
+    "ld": 0.241,
+    "kAB": 0.169,
+    "pHitAB": 0.398,
+    "expAB": 4.21
    }
   },
   {
@@ -456,6 +572,35 @@
    }
   },
   {
+   "id": 676356,
+   "name": "Jonny DeLuca",
+   "team": "TB",
+   "opp": "TOR",
+   "sp": "Shane Bieber",
+   "slot": 5,
+   "park": "TOR",
+   "pHR": 0.1288,
+   "pHit": 0.8489,
+   "pHRraw": 0.1288,
+   "pHitRaw": 0.8489,
+   "hr_detail": {
+    "hrBBE": 0.0425,
+    "barrel": 0.052,
+    "pullAir": 0.127,
+    "hard": 0.323,
+    "mPit": 1.35,
+    "parkPF": 100,
+    "pHRperPA": 0.0343
+   },
+   "hit_detail": {
+    "xbaCon": 0.324,
+    "ld": 0.249,
+    "kAB": 0.196,
+    "pHitAB": 0.385,
+    "expAB": 3.89
+   }
+  },
+  {
    "id": 682818,
    "name": "Yohendrick Pi\u00f1ango",
    "team": "TOR",
@@ -656,6 +801,35 @@
     "kAB": 0.257,
     "pHitAB": 0.298,
     "expAB": 3.53
+   }
+  },
+  {
+   "id": 676439,
+   "name": "Hunter Feduccia",
+   "team": "TB",
+   "opp": "TOR",
+   "sp": "Shane Bieber",
+   "slot": 9,
+   "park": "TOR",
+   "pHR": 0.1086,
+   "pHit": 0.7289,
+   "pHRraw": 0.1086,
+   "pHitRaw": 0.7289,
+   "hr_detail": {
+    "hrBBE": 0.0319,
+    "barrel": 0.079,
+    "pullAir": 0.089,
+    "hard": 0.379,
+    "mPit": 1.35,
+    "parkPF": 100,
+    "pHRperPA": 0.0282
+   },
+   "hit_detail": {
+    "xbaCon": 0.314,
+    "ld": 0.221,
+    "kAB": 0.208,
+    "pHitAB": 0.359,
+    "expAB": 3.47
    }
   },
   {
@@ -888,6 +1062,35 @@
     "kAB": 0.19,
     "pHitAB": 0.268,
     "expAB": 3.61
+   }
+  },
+  {
+   "id": 680700,
+   "name": "Richie Palacios",
+   "team": "TB",
+   "opp": "TOR",
+   "sp": "Shane Bieber",
+   "slot": 8,
+   "park": "TOR",
+   "pHR": 0.0868,
+   "pHit": 0.8406,
+   "pHRraw": 0.0868,
+   "pHitRaw": 0.8406,
+   "hr_detail": {
+    "hrBBE": 0.0256,
+    "barrel": 0.048,
+    "pullAir": 0.112,
+    "hard": 0.291,
+    "mPit": 1.35,
+    "parkPF": 100,
+    "pHRperPA": 0.0217
+   },
+   "hit_detail": {
+    "xbaCon": 0.31,
+    "ld": 0.254,
+    "kAB": 0.181,
+    "pHitAB": 0.379,
+    "expAB": 3.54
    }
   },
   {
@@ -1152,6 +1355,35 @@
    }
   },
   {
+   "id": 810938,
+   "name": "Ben Williamson",
+   "team": "TB",
+   "opp": "TOR",
+   "sp": "Shane Bieber",
+   "slot": 7,
+   "park": "TOR",
+   "pHR": 0.0591,
+   "pHit": 0.8465,
+   "pHRraw": 0.0591,
+   "pHitRaw": 0.8465,
+   "hr_detail": {
+    "hrBBE": 0.0207,
+    "barrel": 0.034,
+    "pullAir": 0.053,
+    "hard": 0.354,
+    "mPit": 1.35,
+    "parkPF": 100,
+    "pHRperPA": 0.0149
+   },
+   "hit_detail": {
+    "xbaCon": 0.32,
+    "ld": 0.248,
+    "kAB": 0.187,
+    "pHitAB": 0.385,
+    "expAB": 3.68
+   }
+  },
+  {
    "id": 807712,
    "name": "Luke Keaschall",
    "team": "MIN",
@@ -1323,6 +1555,35 @@
     "kAB": 0.189,
     "pHitAB": 0.374,
     "expAB": 4.11
+   }
+  },
+  {
+   "id": 802415,
+   "name": "Chandler Simpson",
+   "team": "TB",
+   "opp": "TOR",
+   "sp": "Shane Bieber",
+   "slot": 6,
+   "park": "TOR",
+   "pHR": 0.0219,
+   "pHit": 0.8403,
+   "pHRraw": 0.0219,
+   "pHitRaw": 0.8403,
+   "hr_detail": {
+    "hrBBE": 0.0072,
+    "barrel": 0.013,
+    "pullAir": 0.037,
+    "hard": 0.182,
+    "mPit": 1.35,
+    "parkPF": 100,
+    "pHRperPA": 0.0054
+   },
+   "hit_detail": {
+    "xbaCon": 0.302,
+    "ld": 0.223,
+    "kAB": 0.141,
+    "pHitAB": 0.376,
+    "expAB": 3.81
    }
   }
  ]
