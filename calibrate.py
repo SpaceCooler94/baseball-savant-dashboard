@@ -61,7 +61,7 @@ EPS = 1e-6
 
 # Sim model version to fit. Bump when hrhit's math changes, exactly like
 # MODEL_VERSION -- older sim rows then stop counting toward MIN_ROWS.
-SIM_MODEL_VERSION = "hrhit-1.0"
+SIM_MODEL_VERSION = "hrhit-1.1"
 
 
 def _logit(p):
