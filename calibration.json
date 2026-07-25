@@ -1,6 +1,6 @@
 {
  "modelVersion": "log5-v5.4",
- "simModelVersion": "hrhit-1.0",
+ "simModelVersion": "hrhit-1.1",
  "fitDate": "2026-07-25",
  "reports": {
   "hit": {
@@ -12,12 +12,12 @@
    "verdict": "identity: only 1824 rows (< 2000)"
   },
   "simHit": {
-   "n": 43,
-   "verdict": "identity: only 43 rows (< 2000)"
+   "n": 572,
+   "verdict": "identity: only 572 rows (< 2000)"
   },
   "simHr": {
-   "n": 43,
-   "verdict": "identity: only 43 rows (< 2000)"
+   "n": 572,
+   "verdict": "identity: only 572 rows (< 2000)"
   }
  }
 }
