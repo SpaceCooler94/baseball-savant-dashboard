@@ -19,5 +19,528 @@
   "ld": 0.2378,
   "ba_con": 0.3207
  },
- "players": []
+ "players": [
+  {
+   "id": 670042,
+   "name": "Luke Raley",
+   "team": "SEA",
+   "opp": "TEX",
+   "sp": "Kumar Rocker",
+   "slot": 6,
+   "park": "TEX",
+   "pHR": 0.1757,
+   "pHit": 0.8097,
+   "pHRraw": 0.1757,
+   "pHitRaw": 0.8097,
+   "hr_detail": {
+    "hrBBE": 0.0778,
+    "barrel": 0.139,
+    "pullAir": 0.146,
+    "hard": 0.454,
+    "mPit": 0.94,
+    "parkPF": 104,
+    "pHRperPA": 0.0489
+   },
+   "hit_detail": {
+    "xbaCon": 0.336,
+    "ld": 0.272,
+    "kAB": 0.25,
+    "pHitAB": 0.349,
+    "expAB": 3.81
+   }
+  },
+  {
+   "id": 592626,
+   "name": "Joc Pederson",
+   "team": "TEX",
+   "opp": "SEA",
+   "sp": "George Kirby",
+   "slot": 1,
+   "park": "TEX",
+   "pHR": 0.1709,
+   "pHit": 0.8287,
+   "pHRraw": 0.1709,
+   "pHitRaw": 0.8287,
+   "hr_detail": {
+    "hrBBE": 0.0736,
+    "barrel": 0.104,
+    "pullAir": 0.128,
+    "hard": 0.468,
+    "mPit": 0.823,
+    "parkPF": 104,
+    "pHRperPA": 0.0373
+   },
+   "hit_detail": {
+    "xbaCon": 0.348,
+    "ld": 0.246,
+    "kAB": 0.216,
+    "pHitAB": 0.365,
+    "expAB": 4.21
+   }
+  },
+  {
+   "id": 686527,
+   "name": "Dominic Canzone",
+   "team": "SEA",
+   "opp": "TEX",
+   "sp": "Kumar Rocker",
+   "slot": 3,
+   "park": "TEX",
+   "pHR": 0.1664,
+   "pHit": 0.7914,
+   "pHRraw": 0.1664,
+   "pHitRaw": 0.7914,
+   "hr_detail": {
+    "hrBBE": 0.072,
+    "barrel": 0.126,
+    "pullAir": 0.105,
+    "hard": 0.452,
+    "mPit": 0.94,
+    "parkPF": 104,
+    "pHRperPA": 0.0447
+   },
+   "hit_detail": {
+    "xbaCon": 0.318,
+    "ld": 0.21,
+    "kAB": 0.207,
+    "pHitAB": 0.329,
+    "expAB": 4.01
+   }
+  },
+  {
+   "id": 694671,
+   "name": "Wyatt Langford",
+   "team": "TEX",
+   "opp": "SEA",
+   "sp": "George Kirby",
+   "slot": 2,
+   "park": "TEX",
+   "pHR": 0.1609,
+   "pHit": 0.8293,
+   "pHRraw": 0.1609,
+   "pHitRaw": 0.8293,
+   "hr_detail": {
+    "hrBBE": 0.0652,
+    "barrel": 0.087,
+    "pullAir": 0.138,
+    "hard": 0.383,
+    "mPit": 0.823,
+    "parkPF": 104,
+    "pHRperPA": 0.0347
+   },
+   "hit_detail": {
+    "xbaCon": 0.334,
+    "ld": 0.266,
+    "kAB": 0.209,
+    "pHitAB": 0.361,
+    "expAB": 4.16
+   }
+  },
+  {
+   "id": 677594,
+   "name": "Julio Rodr\u00edguez",
+   "team": "SEA",
+   "opp": "TEX",
+   "sp": "Kumar Rocker",
+   "slot": 2,
+   "park": "TEX",
+   "pHR": 0.1417,
+   "pHit": 0.8315,
+   "pHRraw": 0.1417,
+   "pHitRaw": 0.8315,
+   "hr_detail": {
+    "hrBBE": 0.0507,
+    "barrel": 0.088,
+    "pullAir": 0.101,
+    "hard": 0.427,
+    "mPit": 0.94,
+    "parkPF": 104,
+    "pHRperPA": 0.0312
+   },
+   "hit_detail": {
+    "xbaCon": 0.339,
+    "ld": 0.25,
+    "kAB": 0.201,
+    "pHitAB": 0.367,
+    "expAB": 4.12
+   }
+  },
+  {
+   "id": 669394,
+   "name": "Jake Burger",
+   "team": "TEX",
+   "opp": "SEA",
+   "sp": "George Kirby",
+   "slot": 6,
+   "park": "TEX",
+   "pHR": 0.1347,
+   "pHit": 0.7658,
+   "pHRraw": 0.1347,
+   "pHitRaw": 0.7658,
+   "hr_detail": {
+    "hrBBE": 0.0644,
+    "barrel": 0.102,
+    "pullAir": 0.15,
+    "hard": 0.452,
+    "mPit": 0.823,
+    "parkPF": 104,
+    "pHRperPA": 0.0353
+   },
+   "hit_detail": {
+    "xbaCon": 0.317,
+    "ld": 0.202,
+    "kAB": 0.242,
+    "pHitAB": 0.307,
+    "expAB": 3.75
+   }
+  },
+  {
+   "id": 702284,
+   "name": "Cole Young",
+   "team": "SEA",
+   "opp": "TEX",
+   "sp": "Kumar Rocker",
+   "slot": 1,
+   "park": "TEX",
+   "pHR": 0.1292,
+   "pHit": 0.8338,
+   "pHRraw": 0.1292,
+   "pHitRaw": 0.8338,
+   "hr_detail": {
+    "hrBBE": 0.042,
+    "barrel": 0.058,
+    "pullAir": 0.155,
+    "hard": 0.385,
+    "mPit": 0.94,
+    "parkPF": 104,
+    "pHRperPA": 0.0278
+   },
+   "hit_detail": {
+    "xbaCon": 0.33,
+    "ld": 0.246,
+    "kAB": 0.176,
+    "pHitAB": 0.366,
+    "expAB": 4.28
+   }
+  },
+  {
+   "id": 641598,
+   "name": "Mitch Garver",
+   "team": "SEA",
+   "opp": "TEX",
+   "sp": "Kumar Rocker",
+   "slot": 7,
+   "park": "TEX",
+   "pHR": 0.1187,
+   "pHit": 0.7968,
+   "pHRraw": 0.1187,
+   "pHitRaw": 0.7968,
+   "hr_detail": {
+    "hrBBE": 0.0506,
+    "barrel": 0.081,
+    "pullAir": 0.174,
+    "hard": 0.447,
+    "mPit": 0.94,
+    "parkPF": 104,
+    "pHRperPA": 0.0309
+   },
+   "hit_detail": {
+    "xbaCon": 0.327,
+    "ld": 0.243,
+    "kAB": 0.237,
+    "pHitAB": 0.335,
+    "expAB": 3.64
+   }
+  },
+  {
+   "id": 668227,
+   "name": "Randy Arozarena",
+   "team": "SEA",
+   "opp": "TEX",
+   "sp": "Kumar Rocker",
+   "slot": 4,
+   "park": "TEX",
+   "pHR": 0.1002,
+   "pHit": 0.8218,
+   "pHRraw": 0.1002,
+   "pHitRaw": 0.8218,
+   "hr_detail": {
+    "hrBBE": 0.0442,
+    "barrel": 0.08,
+    "pullAir": 0.088,
+    "hard": 0.425,
+    "mPit": 0.94,
+    "parkPF": 104,
+    "pHRperPA": 0.0252
+   },
+   "hit_detail": {
+    "xbaCon": 0.337,
+    "ld": 0.225,
+    "kAB": 0.195,
+    "pHitAB": 0.358,
+    "expAB": 3.82
+   }
+  },
+  {
+   "id": 806068,
+   "name": "Colt Emerson",
+   "team": "SEA",
+   "opp": "TEX",
+   "sp": "Kumar Rocker",
+   "slot": 9,
+   "park": "TEX",
+   "pHR": 0.0993,
+   "pHit": 0.7772,
+   "pHRraw": 0.0993,
+   "pHitRaw": 0.7772,
+   "hr_detail": {
+    "hrBBE": 0.0559,
+    "barrel": 0.062,
+    "pullAir": 0.116,
+    "hard": 0.324,
+    "mPit": 0.94,
+    "parkPF": 104,
+    "pHRperPA": 0.0261
+   },
+   "hit_detail": {
+    "xbaCon": 0.316,
+    "ld": 0.232,
+    "kAB": 0.246,
+    "pHitAB": 0.318,
+    "expAB": 3.51
+   }
+  },
+  {
+   "id": 607043,
+   "name": "Brandon Nimmo",
+   "team": "TEX",
+   "opp": "SEA",
+   "sp": "George Kirby",
+   "slot": 4,
+   "park": "TEX",
+   "pHR": 0.0971,
+   "pHit": 0.8489,
+   "pHRraw": 0.0971,
+   "pHitRaw": 0.8489,
+   "hr_detail": {
+    "hrBBE": 0.0362,
+    "barrel": 0.113,
+    "pullAir": 0.086,
+    "hard": 0.496,
+    "mPit": 0.823,
+    "parkPF": 104,
+    "pHRperPA": 0.025
+   },
+   "hit_detail": {
+    "xbaCon": 0.353,
+    "ld": 0.295,
+    "kAB": 0.222,
+    "pHitAB": 0.385,
+    "expAB": 3.96
+   }
+  },
+  {
+   "id": 641487,
+   "name": "J.P. Crawford",
+   "team": "SEA",
+   "opp": "TEX",
+   "sp": "Kumar Rocker",
+   "slot": 8,
+   "park": "TEX",
+   "pHR": 0.089,
+   "pHit": 0.7009,
+   "pHRraw": 0.089,
+   "pHitRaw": 0.7009,
+   "hr_detail": {
+    "hrBBE": 0.0442,
+    "barrel": 0.069,
+    "pullAir": 0.105,
+    "hard": 0.366,
+    "mPit": 0.94,
+    "parkPF": 104,
+    "pHRperPA": 0.024
+   },
+   "hit_detail": {
+    "xbaCon": 0.321,
+    "ld": 0.235,
+    "kAB": 0.211,
+    "pHitAB": 0.339,
+    "expAB": 3.49
+   }
+  },
+  {
+   "id": 553869,
+   "name": "Elias D\u00edaz",
+   "team": "TEX",
+   "opp": "SEA",
+   "sp": "George Kirby",
+   "slot": 9,
+   "park": "TEX",
+   "pHR": 0.0888,
+   "pHit": 0.8001,
+   "pHRraw": 0.0888,
+   "pHitRaw": 0.8001,
+   "hr_detail": {
+    "hrBBE": 0.0449,
+    "barrel": 0.065,
+    "pullAir": 0.115,
+    "hard": 0.37,
+    "mPit": 0.823,
+    "parkPF": 104,
+    "pHRperPA": 0.0237
+   },
+   "hit_detail": {
+    "xbaCon": 0.318,
+    "ld": 0.247,
+    "kAB": 0.218,
+    "pHitAB": 0.333,
+    "expAB": 3.56
+   }
+  },
+  {
+   "id": 694497,
+   "name": "Evan Carter",
+   "team": "TEX",
+   "opp": "SEA",
+   "sp": "George Kirby",
+   "slot": 5,
+   "park": "TEX",
+   "pHR": 0.0871,
+   "pHit": 0.7512,
+   "pHRraw": 0.0871,
+   "pHitRaw": 0.7512,
+   "hr_detail": {
+    "hrBBE": 0.0447,
+    "barrel": 0.066,
+    "pullAir": 0.117,
+    "hard": 0.377,
+    "mPit": 0.823,
+    "parkPF": 104,
+    "pHRperPA": 0.0209
+   },
+   "hit_detail": {
+    "xbaCon": 0.301,
+    "ld": 0.203,
+    "kAB": 0.223,
+    "pHitAB": 0.3,
+    "expAB": 3.74
+   }
+  },
+  {
+   "id": 677649,
+   "name": "Ezequiel Duran",
+   "team": "TEX",
+   "opp": "SEA",
+   "sp": "George Kirby",
+   "slot": 3,
+   "park": "TEX",
+   "pHR": 0.0844,
+   "pHit": 0.8231,
+   "pHRraw": 0.0844,
+   "pHitRaw": 0.8231,
+   "hr_detail": {
+    "hrBBE": 0.0447,
+    "barrel": 0.068,
+    "pullAir": 0.092,
+    "hard": 0.373,
+    "mPit": 0.823,
+    "parkPF": 104,
+    "pHRperPA": 0.0212
+   },
+   "hit_detail": {
+    "xbaCon": 0.329,
+    "ld": 0.272,
+    "kAB": 0.227,
+    "pHitAB": 0.35,
+    "expAB": 4.07
+   }
+  },
+  {
+   "id": 647304,
+   "name": "Josh Naylor",
+   "team": "SEA",
+   "opp": "TEX",
+   "sp": "Kumar Rocker",
+   "slot": 5,
+   "park": "TEX",
+   "pHR": 0.0763,
+   "pHit": 0.8211,
+   "pHRraw": 0.0763,
+   "pHitRaw": 0.8211,
+   "hr_detail": {
+    "hrBBE": 0.0272,
+    "barrel": 0.053,
+    "pullAir": 0.112,
+    "hard": 0.371,
+    "mPit": 0.94,
+    "parkPF": 104,
+    "pHRperPA": 0.0192
+   },
+   "hit_detail": {
+    "xbaCon": 0.319,
+    "ld": 0.23,
+    "kAB": 0.161,
+    "pHitAB": 0.355,
+    "expAB": 3.84
+   }
+  },
+  {
+   "id": 669701,
+   "name": "Josh Smith",
+   "team": "TEX",
+   "opp": "SEA",
+   "sp": "George Kirby",
+   "slot": 8,
+   "park": "TEX",
+   "pHR": 0.066,
+   "pHit": 0.7614,
+   "pHRraw": 0.066,
+   "pHitRaw": 0.7614,
+   "hr_detail": {
+    "hrBBE": 0.023,
+    "barrel": 0.066,
+    "pullAir": 0.137,
+    "hard": 0.342,
+    "mPit": 0.823,
+    "parkPF": 104,
+    "pHRperPA": 0.0164
+   },
+   "hit_detail": {
+    "xbaCon": 0.3,
+    "ld": 0.22,
+    "kAB": 0.214,
+    "pHitAB": 0.307,
+    "expAB": 3.6
+   }
+  },
+  {
+   "id": 670032,
+   "name": "Nicky Lopez",
+   "team": "TEX",
+   "opp": "SEA",
+   "sp": "George Kirby",
+   "slot": 7,
+   "park": "TEX",
+   "pHR": 0.0406,
+   "pHit": 0.7864,
+   "pHRraw": 0.0406,
+   "pHitRaw": 0.7864,
+   "hr_detail": {
+    "hrBBE": 0.02,
+    "barrel": 0.025,
+    "pullAir": 0.087,
+    "hard": 0.286,
+    "mPit": 0.823,
+    "parkPF": 104,
+    "pHRperPA": 0.0093
+   },
+   "hit_detail": {
+    "xbaCon": 0.307,
+    "ld": 0.228,
+    "kAB": 0.189,
+    "pHitAB": 0.327,
+    "expAB": 3.73
+   }
+  }
+ ]
 }
