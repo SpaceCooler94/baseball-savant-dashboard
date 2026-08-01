@@ -762,12 +762,14 @@ def project_side(hitters, opp_pitcher, ctx, league, calibration, extras=None):
             rf = dict(rf)
             if rf.get("profile"):
                 rf["profileEmoji"] = RF.PROFILES[rf["profile"]]["emoji"]
-        zone_score, zone_grade = None, None
+        zone_score, zone_grade, strong_list = None, None, None
         zone_cache = ex.get("zoneCache")
         used = set((opp_pitcher or {}).get("_usedZones") or [])
-        if zone_cache and used:
+        if zone_cache:
             strong = Z.strong_zones(zone_cache, h["id"])
-            zone_score, zone_grade = Z.score_matchup(strong, used)
+            strong_list = sorted(strong) or None
+            if used:
+                zone_score, zone_grade = Z.score_matchup(strong, used)
         row = {
             "hitterId": h["id"], "name": h["name"], "pos": h["pos"],
             "teamAbbr": h["teamAbbr"], "batSide": h.get("batSide"),
@@ -788,6 +790,7 @@ def project_side(hitters, opp_pitcher, ctx, league, calibration, extras=None):
             "recentForm": rf,
             "zoneScore": zone_score,
             "zoneGrade": zone_grade,
+            "zoneStrong": strong_list,
             "confidence": confidence(h.get("pa"),
                                      (opp_pitcher or {}).get("battersFaced"),
                                      hit["dataQuality"], hr["dataQuality"]),
@@ -876,10 +879,12 @@ def enrich_probable(pd_dict, pid, rf_pitchers, rf_df):
     pd_dict["mixDrift"] = drifts
     pd_dict["crushedPitches"] = crushed
     try:
-        pd_dict["_usedZones"] = sorted(
-            Z.pitcher_used_zones(rf_df, pid, rec.get("gamePks") or []))
+        gpks = rec.get("gamePks") or []
+        pd_dict["_usedZones"] = sorted(Z.pitcher_used_zones(rf_df, pid, gpks))
+        pd_dict["_zoneShares"] = Z.zone_shares(rf_df, pid, gpks)
     except Exception:
         pd_dict["_usedZones"] = []
+        pd_dict["_zoneShares"] = {}
 
 
 def build_board():
@@ -937,7 +942,8 @@ def build_board():
                     "recentStarts": pd.get("recentStarts"),
                     "mixDrift": pd.get("mixDrift"),
                     "crushedPitches": pd.get("crushedPitches"),
-                    "usedZones": pd.get("_usedZones")}
+                    "usedZones": pd.get("_usedZones"),
+                    "zoneShares": pd.get("_zoneShares")}
 
         # topHitTargets/topHrTargets/topOverall are gone: no client read them
         # and they tripled the payload with duplicate player objects. Clients
