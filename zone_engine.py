@@ -41,7 +41,15 @@ CACHE_PATH = "zones_cache.json"
 
 MIN_ZONE_BBE = 8
 STRONG_SCORE = 0.15
-USED_SHARE = 12.0        # % of recent pitches in a zone to call it "used"
+# A zone counts as "used" when it takes ABOVE-AVERAGE share of the pitcher's
+# IN-ZONE pitches. v1 measured share of ALL pitches (chase zones included in the
+# denominator) against a flat 12% bar -- but with 9 in-zone plus 4 chase buckets,
+# uniform is ~7.7%, so 12% demanded unusual concentration and almost no starter
+# cleared it. Measured on the 2026-08-01 board: 2 of 29 probables had ANY used
+# zone, so zoneGrade was null on all 375 rows and the whole layer was dead.
+# Uniform across 9 in-zone buckets is 11.1%; the bar below is just above it, so
+# "used" now means what it says -- this is where he actually lives.
+USED_SHARE = 12.0        # % of the pitcher's IN-ZONE pitches
 GOOD_ZONES = 4           # of 9 -- proportional to DTP's 3/7
 ELITE_ZONES = 5          # of 9 -- proportional to DTP's 4/7
 ZONES = [str(z) for z in range(1, 10)]
@@ -186,17 +194,40 @@ def pitcher_used_zones(df, pitcher_id, game_pks):
     if df is None or any(c not in df.columns for c in ("pitcher", "game_pk", "zone")):
         return set()
     g = df[(df["pitcher"] == pitcher_id) & (df["game_pk"].isin(game_pks))]
-    total = len(g)
-    if total < 30:
+    if len(g) < 30:
         return set()
-    out = set()
+    # Denominator is in-zone pitches only -- see USED_SHARE note above.
+    in_zone = {}
     for zone, zg in g.groupby("zone"):
         z = _f(zone)
         if z is None or not (1 <= int(z) <= 9):
             continue
-        if len(zg) / total * 100 >= USED_SHARE:
-            out.add(str(int(z)))
-    return out
+        in_zone[str(int(z))] = len(zg)
+    total_in = sum(in_zone.values())
+    if total_in < 20:
+        return set()
+    return {z for z, n in in_zone.items() if n / total_in * 100 >= USED_SHARE}
+
+
+def zone_shares(df, pitcher_id, game_pks):
+    """Full 9-cell in-zone distribution for the zone diagram: {zone: pct}.
+    Display data -- the strike-zone drawing needs every cell, not just the hot
+    ones."""
+    if df is None or any(c not in df.columns for c in ("pitcher", "game_pk", "zone")):
+        return {}
+    g = df[(df["pitcher"] == pitcher_id) & (df["game_pk"].isin(game_pks))]
+    if len(g) < 30:
+        return {}
+    counts = {}
+    for zone, zg in g.groupby("zone"):
+        z = _f(zone)
+        if z is None or not (1 <= int(z) <= 9):
+            continue
+        counts[str(int(z))] = len(zg)
+    total = sum(counts.values())
+    if total < 20:
+        return {}
+    return {z: round(n / total * 100, 1) for z, n in counts.items()}
 
 
 def score_matchup(batter_strong, pitcher_used):
