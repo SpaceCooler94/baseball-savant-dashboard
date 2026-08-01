@@ -1,149 +1,140 @@
 {
  "modelVersion": "log5-v5.4",
- "simModelVersion": "hrhit-1.1",
  "fitDate": "2026-08-01",
  "reports": {
   "hit": {
-   "n": 3737,
-   "valLogLossRaw": 0.70793,
-   "valLogLossCal": 0.68958,
-   "trainScale": 0.7736,
-   "trainOffset": -0.1549,
+   "n": 3155,
+   "valLogLossRaw": 0.67348,
+   "valLogLossCal": 0.66935,
+   "trainScale": 0.5504,
+   "trainOffset": 0.1975,
    "verdict": "published"
   },
   "hr": {
-   "n": 3737,
-   "valLogLossRaw": 0.28891,
-   "valLogLossCal": 0.28557,
-   "trainScale": 0.9373,
-   "trainOffset": -0.2801,
+   "n": 3155,
+   "valLogLossRaw": 0.31192,
+   "valLogLossCal": 0.31138,
+   "trainScale": 0.9429,
+   "trainOffset": -0.1587,
    "verdict": "published"
-  },
-  "simHit": {
-   "n": 1882,
-   "verdict": "identity: only 1882 rows (< 2000)"
-  },
-  "simHr": {
-   "n": 1882,
-   "verdict": "identity: only 1882 rows (< 2000)"
   }
  },
  "hit": {
-  "scale": 0.7071,
-  "offset": -0.1518,
-  "n": 3737,
-  "valLogLossRaw": 0.70793,
-  "valLogLossCal": 0.68958
+  "scale": 0.4552,
+  "offset": 0.2314,
+  "n": 3155,
+  "valLogLossRaw": 0.67348,
+  "valLogLossCal": 0.66935
  },
  "reliabilityHit": [
   {
-   "n": 373,
-   "meanPredicted": 0.5469,
-   "observedRate": 0.5228
+   "n": 315,
+   "meanPredicted": 0.5494,
+   "observedRate": 0.581
   },
   {
-   "n": 374,
-   "meanPredicted": 0.5862,
-   "observedRate": 0.4893
+   "n": 316,
+   "meanPredicted": 0.5875,
+   "observedRate": 0.5728
   },
   {
-   "n": 374,
-   "meanPredicted": 0.6048,
-   "observedRate": 0.5535
+   "n": 315,
+   "meanPredicted": 0.6064,
+   "observedRate": 0.6159
   },
   {
-   "n": 373,
-   "meanPredicted": 0.6197,
-   "observedRate": 0.5442
+   "n": 316,
+   "meanPredicted": 0.6217,
+   "observedRate": 0.6329
   },
   {
-   "n": 374,
-   "meanPredicted": 0.6323,
-   "observedRate": 0.5401
+   "n": 315,
+   "meanPredicted": 0.6346,
+   "observedRate": 0.6
   },
   {
-   "n": 374,
-   "meanPredicted": 0.6448,
-   "observedRate": 0.5508
+   "n": 316,
+   "meanPredicted": 0.6474,
+   "observedRate": 0.6139
   },
   {
-   "n": 373,
-   "meanPredicted": 0.6578,
-   "observedRate": 0.5818
+   "n": 315,
+   "meanPredicted": 0.6606,
+   "observedRate": 0.673
   },
   {
-   "n": 374,
-   "meanPredicted": 0.6716,
-   "observedRate": 0.6203
+   "n": 316,
+   "meanPredicted": 0.6744,
+   "observedRate": 0.6361
   },
   {
-   "n": 374,
-   "meanPredicted": 0.6878,
-   "observedRate": 0.623
+   "n": 315,
+   "meanPredicted": 0.6909,
+   "observedRate": 0.6413
   },
   {
-   "n": 374,
-   "meanPredicted": 0.7218,
-   "observedRate": 0.5963
+   "n": 316,
+   "meanPredicted": 0.7249,
+   "observedRate": 0.6456
   }
  ],
  "hr": {
-  "scale": 1.1015,
-  "offset": -0.0144,
-  "n": 3737,
-  "valLogLossRaw": 0.28891,
-  "valLogLossCal": 0.28557
+  "scale": 1.0905,
+  "offset": 0.0791,
+  "n": 3155,
+  "valLogLossRaw": 0.31192,
+  "valLogLossCal": 0.31138
  },
  "reliabilityHr": [
   {
-   "n": 373,
-   "meanPredicted": 0.0652,
-   "observedRate": 0.0617
+   "n": 315,
+   "meanPredicted": 0.065,
+   "observedRate": 0.0667
   },
   {
-   "n": 374,
-   "meanPredicted": 0.0825,
-   "observedRate": 0.0508
+   "n": 316,
+   "meanPredicted": 0.0824,
+   "observedRate": 0.057
   },
   {
-   "n": 374,
-   "meanPredicted": 0.0928,
-   "observedRate": 0.0695
+   "n": 315,
+   "meanPredicted": 0.093,
+   "observedRate": 0.0825
   },
   {
-   "n": 373,
-   "meanPredicted": 0.1011,
-   "observedRate": 0.0751
+   "n": 316,
+   "meanPredicted": 0.1016,
+   "observedRate": 0.0949
   },
   {
-   "n": 374,
-   "meanPredicted": 0.1097,
-   "observedRate": 0.1043
+   "n": 315,
+   "meanPredicted": 0.1103,
+   "observedRate": 0.1111
   },
   {
-   "n": 374,
-   "meanPredicted": 0.1192,
-   "observedRate": 0.0936
+   "n": 316,
+   "meanPredicted": 0.1198,
+   "observedRate": 0.0949
   },
   {
-   "n": 373,
-   "meanPredicted": 0.129,
-   "observedRate": 0.1046
+   "n": 315,
+   "meanPredicted": 0.1298,
+   "observedRate": 0.1111
   },
   {
-   "n": 374,
-   "meanPredicted": 0.1408,
-   "observedRate": 0.1257
+   "n": 316,
+   "meanPredicted": 0.1416,
+   "observedRate": 0.1392
   },
   {
-   "n": 374,
-   "meanPredicted": 0.157,
-   "observedRate": 0.1337
+   "n": 315,
+   "meanPredicted": 0.1587,
+   "observedRate": 0.1651
   },
   {
-   "n": 374,
-   "meanPredicted": 0.198,
-   "observedRate": 0.1738
+   "n": 316,
+   "meanPredicted": 0.2005,
+   "observedRate": 0.1835
   }
  ]
 }
