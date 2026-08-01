@@ -8,19 +8,6 @@
 # only when the fit clears every gate. build_daily_board.py picks the file up
 # on its next run; mlb_model.apply_calibration consumes {scale, offset}.
 #
-# SIM MARKETS (added): the same ledger rows may also carry simHitRaw/simHrRaw
-# from the hrhit Monte Carlo board. Those are fit SEPARATELY into simHit/simHr
-# blocks, which hrhit_model.py consumes on its next build. Two reasons they are
-# never pooled with the log5 fit:
-#   - Different generating process. A Platt curve fit on a mixture of two
-#     models' probabilities is wrong for both -- it splits the difference on a
-#     miscalibration that only one of them has.
-#   - Different version cadence. Sim rows are gated on simModelVersion, not
-#     MODEL_VERSION, so a log5 bump doesn't throw away sim history (and a sim
-#     bump doesn't throw away log5 history).
-# Each sim market clears the same MIN_ROWS gate independently, so expect
-# identity stubs for weeks after the log5 markets have published.
-#
 # GATES (a fit that fails any gate publishes IDENTITY for that market):
 #   1. n >= MIN_ROWS settled rows for the current MODEL_VERSION only
 #      (rows from older model math are a different distribution -- excluded).
@@ -59,9 +46,25 @@ MIN_IMPROVEMENT = 0.0005     # absolute validation log-loss improvement required
 SCALE_BAND = (0.2, 3.0)
 EPS = 1e-6
 
-# Sim model version to fit. Bump when hrhit's math changes, exactly like
-# MODEL_VERSION -- older sim rows then stop counting toward MIN_ROWS.
-SIM_MODEL_VERSION = "hrhit-1.1"
+# PLAYING-TIME GATE -- the fix for a real bias found on the 2026-08-01 board.
+#
+# The board projects every hitter on expected_pa(None) = 3.9 PA, because lineups
+# aren't posted at build time. settle.py voids 0-PA rows, but a bench bat who
+# pinch-hits once and makes an out was still settled as a MISS against a
+# full-game prediction. The pool carries ~12.5 hitters per team against a 9-10
+# man lineup, so ~24% of settled rows were part-time appearances.
+#
+# Platt then did exactly what it was asked: it learned that the average ledger
+# row underperforms a 3.9-PA projection, and pushed EVERY probability down to
+# match -- fitting the pool's bench mix rather than any model overconfidence.
+# Measured effect on 8/1: hit scale 0.707 / offset -0.152, median hit .631 raw
+# -> .557 calibrated, top of slate .751 -> .653, and zero A-tier hit rows.
+#
+# Fix: fit only on rows whose ACTUAL playing time resembles the projection.
+# actualPA is already recorded on every ledger row, so this repairs the existing
+# ledger retroactively -- no re-settling needed. Rows below the floor stay in the
+# ledger for ROI/angle analysis; they're just not used to fit calibration.
+MIN_ACTUAL_PA = 3
 
 
 def _logit(p):
@@ -139,16 +142,9 @@ def reliability_table(raw_probs, ys, buckets=10):
     return out
 
 
-def load_rows(version_field="modelVersion", version=None, required=("hitRaw", "hrRaw")):
-    """Ledger rows for one model version, deduped on (date, hitterId) -- a
-    partially-settled day that was retried can appear twice; last wins.
-
-    version_field lets the sim markets filter on simModelVersion instead, so
-    the two models' histories are gated independently even though they share
-    rows. required drops rows missing that market's predictions (e.g. log5
-    rows from dates where no sim board existed)."""
-    if version is None:
-        version = MODEL_VERSION
+def load_rows():
+    """Ledger rows for the CURRENT model version, deduped on (date, hitterId)
+    -- a partially-settled day that was retried can appear twice; last wins."""
     if not os.path.exists(LEDGER_PATH):
         return []
     dedup = {}
@@ -161,13 +157,26 @@ def load_rows(version_field="modelVersion", version=None, required=("hitRaw", "h
                 r = json.loads(line)
             except json.JSONDecodeError:
                 continue
-            if r.get(version_field) != version:
+            if r.get("modelVersion") != MODEL_VERSION:
                 continue
-            if any(r.get(k) is None for k in required):
+            if r.get("hitRaw") is None or r.get("hrRaw") is None:
                 continue
             dedup[(r.get("date"), r.get("hitterId"))] = r
-    rows = list(dedup.values())
+    skipped_pa = 0
+    rows = []
+    for r in dedup.values():
+        pa = r.get("actualPA")
+        # Older ledger rows (pre-fix) may lack actualPA; keep them rather than
+        # silently shrinking the fit set, but count them so the log is honest.
+        if pa is not None and pa < MIN_ACTUAL_PA:
+            skipped_pa += 1
+            continue
+        rows.append(r)
     rows.sort(key=lambda r: (r.get("date") or "", r.get("hitterId") or 0))
+    if skipped_pa:
+        print(f"Playing-time gate: excluded {skipped_pa} rows under {MIN_ACTUAL_PA} actual PA "
+              f"({100*skipped_pa/(skipped_pa+len(rows)):.1f}% of settled rows) -- "
+              f"these are part-time appearances the 3.9-PA projection never described.")
     return rows
 
 
@@ -221,26 +230,17 @@ def fit_market(rows, raw_key, y_key):
 
 def main():
     rows = load_rows()
-    sim_rows = load_rows(version_field="simModelVersion", version=SIM_MODEL_VERSION,
-                         required=("simHitRaw", "simHrRaw"))
-    print(f"Ledger: {len(rows)} rows for {MODEL_VERSION}, "
-          f"{len(sim_rows)} rows for {SIM_MODEL_VERSION}")
+    print(f"Ledger: {len(rows)} rows for {MODEL_VERSION}")
 
     hit_block, hit_report = fit_market(rows, "hitRaw", "gotHit")
     hr_block, hr_report = fit_market(rows, "hrRaw", "gotHR")
-    shit_block, shit_report = fit_market(sim_rows, "simHitRaw", "gotHit")
-    shr_block, shr_report = fit_market(sim_rows, "simHrRaw", "gotHR")
-    for label, rep in (("hit", hit_report), ("hr ", hr_report),
-                       ("sim hit", shit_report), ("sim hr ", shr_report)):
-        print(f"{label}:", rep.get("verdict"), "|",
-              {k: v for k, v in rep.items() if k != "verdict"})
+    print("hit:", hit_report.get("verdict"), "|", {k: v for k, v in hit_report.items() if k != "verdict"})
+    print("hr :", hr_report.get("verdict"), "|", {k: v for k, v in hr_report.items() if k != "verdict"})
 
     out = {
         "modelVersion": MODEL_VERSION,
-        "simModelVersion": SIM_MODEL_VERSION,
         "fitDate": datetime.datetime.now(ET).strftime("%Y-%m-%d"),
-        "reports": {"hit": hit_report, "hr": hr_report,
-                    "simHit": shit_report, "simHr": shr_report},
+        "reports": {"hit": hit_report, "hr": hr_report},
     }
     if hit_block:
         out["hit"] = hit_block
@@ -250,14 +250,6 @@ def main():
         out["hr"] = hr_block
         out["reliabilityHr"] = reliability_table([r["hrRaw"] for r in rows],
                                                  [r["gotHR"] for r in rows])
-    if shit_block:
-        out["simHit"] = shit_block
-        out["reliabilitySimHit"] = reliability_table([r["simHitRaw"] for r in sim_rows],
-                                                     [r["gotHit"] for r in sim_rows])
-    if shr_block:
-        out["simHr"] = shr_block
-        out["reliabilitySimHr"] = reliability_table([r["simHrRaw"] for r in sim_rows],
-                                                    [r["gotHR"] for r in sim_rows])
 
     # Always write the file: even an all-identity file documents WHY (reports),
     # and build's loader treats missing scale as identity per market.
@@ -266,9 +258,7 @@ def main():
         json.dump(out, f, indent=1)
     os.replace(tmp, OUT_PATH)
     print(f"Wrote {OUT_PATH}: hit={'published' if hit_block else 'identity'}, "
-          f"hr={'published' if hr_block else 'identity'}, "
-          f"simHit={'published' if shit_block else 'identity'}, "
-          f"simHr={'published' if shr_block else 'identity'}")
+          f"hr={'published' if hr_block else 'identity'}")
 
 
 if __name__ == "__main__":
