@@ -21,6 +21,180 @@
  },
  "players": [
   {
+   "id": 808959,
+   "name": "Munetaka Murakami",
+   "team": "CWS",
+   "opp": "TB",
+   "sp": "Drew Rasmussen",
+   "slot": 2,
+   "park": "TB",
+   "pHR": 0.2224,
+   "pHit": 0.7663,
+   "pHRraw": 0.2224,
+   "pHitRaw": 0.7663,
+   "hr_detail": {
+    "hrBBE": 0.1231,
+    "barrel": 0.169,
+    "pullAir": 0.144,
+    "hard": 0.55,
+    "mPit": 0.883,
+    "parkPF": 93,
+    "pHRperPA": 0.05
+   },
+   "hit_detail": {
+    "xbaCon": 0.348,
+    "ld": 0.243,
+    "kAB": 0.28,
+    "pHitAB": 0.311,
+    "expAB": 3.96
+   }
+  },
+  {
+   "id": 681715,
+   "name": "Heriberto Hern\u00e1ndez",
+   "team": "MIA",
+   "opp": "NYM",
+   "sp": "Zac Thornton",
+   "slot": 2,
+   "park": "NYM",
+   "pHR": 0.2088,
+   "pHit": 0.7768,
+   "pHRraw": 0.2088,
+   "pHitRaw": 0.7768,
+   "hr_detail": {
+    "hrBBE": 0.077,
+    "barrel": 0.118,
+    "pullAir": 0.137,
+    "hard": 0.479,
+    "mPit": 0.987,
+    "parkPF": 96,
+    "pHRperPA": 0.0455
+   },
+   "hit_detail": {
+    "xbaCon": 0.334,
+    "ld": 0.212,
+    "kAB": 0.254,
+    "pHitAB": 0.314,
+    "expAB": 4.13
+   }
+  },
+  {
+   "id": 680777,
+   "name": "Ryan Jeffers",
+   "team": "MIN",
+   "opp": "SEA",
+   "sp": "Logan Gilbert",
+   "slot": 2,
+   "park": "SEA",
+   "pHR": 0.193,
+   "pHit": 0.759,
+   "pHRraw": 0.193,
+   "pHitRaw": 0.759,
+   "hr_detail": {
+    "hrBBE": 0.0645,
+    "barrel": 0.11,
+    "pullAir": 0.153,
+    "hard": 0.403,
+    "mPit": 1.113,
+    "parkPF": 92,
+    "pHRperPA": 0.0432
+   },
+   "hit_detail": {
+    "xbaCon": 0.321,
+    "ld": 0.243,
+    "kAB": 0.244,
+    "pHitAB": 0.307,
+    "expAB": 4.08
+   }
+  },
+  {
+   "id": 691023,
+   "name": "Jordan Walker",
+   "team": "STL",
+   "opp": "TOR",
+   "sp": "Kevin Gausman",
+   "slot": 2,
+   "park": "TOR",
+   "pHR": 0.192,
+   "pHit": 0.803,
+   "pHRraw": 0.192,
+   "pHitRaw": 0.803,
+   "hr_detail": {
+    "hrBBE": 0.0679,
+    "barrel": 0.126,
+    "pullAir": 0.102,
+    "hard": 0.471,
+    "mPit": 0.972,
+    "parkPF": 100,
+    "pHRperPA": 0.0403
+   },
+   "hit_detail": {
+    "xbaCon": 0.34,
+    "ld": 0.267,
+    "kAB": 0.252,
+    "pHitAB": 0.34,
+    "expAB": 4.13
+   }
+  },
+  {
+   "id": 621438,
+   "name": "Tyrone Taylor",
+   "team": "NYM",
+   "opp": "MIA",
+   "sp": "Tyler Phillips",
+   "slot": 8,
+   "park": "NYM",
+   "pHR": 0.1779,
+   "pHit": 0.7973,
+   "pHRraw": 0.1779,
+   "pHitRaw": 0.7973,
+   "hr_detail": {
+    "hrBBE": 0.0669,
+    "barrel": 0.101,
+    "pullAir": 0.195,
+    "hard": 0.374,
+    "mPit": 0.938,
+    "parkPF": 96,
+    "pHRperPA": 0.0462
+   },
+   "hit_detail": {
+    "xbaCon": 0.334,
+    "ld": 0.22,
+    "kAB": 0.19,
+    "pHitAB": 0.335,
+    "expAB": 3.52
+   }
+  },
+  {
+   "id": 665052,
+   "name": "Griffin Conine",
+   "team": "MIA",
+   "opp": "NYM",
+   "sp": "Zac Thornton",
+   "slot": 9,
+   "park": "NYM",
+   "pHR": 0.1763,
+   "pHit": 0.7039,
+   "pHRraw": 0.1763,
+   "pHitRaw": 0.7039,
+   "hr_detail": {
+    "hrBBE": 0.0849,
+    "barrel": 0.121,
+    "pullAir": 0.125,
+    "hard": 0.489,
+    "mPit": 0.987,
+    "parkPF": 96,
+    "pHRperPA": 0.0458
+   },
+   "hit_detail": {
+    "xbaCon": 0.347,
+    "ld": 0.24,
+    "kAB": 0.24,
+    "pHitAB": 0.342,
+    "expAB": 3.45
+   }
+  },
+  {
    "id": 672960,
    "name": "Kazuma Okamoto",
    "team": "TOR",
@@ -79,6 +253,470 @@
    }
   },
   {
+   "id": 596019,
+   "name": "Francisco Lindor",
+   "team": "NYM",
+   "opp": "MIA",
+   "sp": "Tyler Phillips",
+   "slot": 2,
+   "park": "NYM",
+   "pHR": 0.1653,
+   "pHit": 0.8198,
+   "pHRraw": 0.1653,
+   "pHitRaw": 0.8198,
+   "hr_detail": {
+    "hrBBE": 0.0521,
+    "barrel": 0.097,
+    "pullAir": 0.147,
+    "hard": 0.469,
+    "mPit": 0.938,
+    "parkPF": 96,
+    "pHRperPA": 0.0358
+   },
+   "hit_detail": {
+    "xbaCon": 0.332,
+    "ld": 0.252,
+    "kAB": 0.174,
+    "pHitAB": 0.351,
+    "expAB": 4.04
+   }
+  },
+  {
+   "id": 695657,
+   "name": "Colson Montgomery",
+   "team": "CWS",
+   "opp": "TB",
+   "sp": "Drew Rasmussen",
+   "slot": 4,
+   "park": "TB",
+   "pHR": 0.1625,
+   "pHit": 0.7005,
+   "pHRraw": 0.1625,
+   "pHitRaw": 0.7005,
+   "hr_detail": {
+    "hrBBE": 0.09,
+    "barrel": 0.119,
+    "pullAir": 0.205,
+    "hard": 0.417,
+    "mPit": 0.883,
+    "parkPF": 93,
+    "pHRperPA": 0.0434
+   },
+   "hit_detail": {
+    "xbaCon": 0.315,
+    "ld": 0.204,
+    "kAB": 0.3,
+    "pHitAB": 0.262,
+    "expAB": 3.95
+   }
+  },
+  {
+   "id": 665019,
+   "name": "Kody Clemens",
+   "team": "MIN",
+   "opp": "SEA",
+   "sp": "Logan Gilbert",
+   "slot": 3,
+   "park": "SEA",
+   "pHR": 0.1614,
+   "pHit": 0.7549,
+   "pHRraw": 0.1614,
+   "pHitRaw": 0.7549,
+   "hr_detail": {
+    "hrBBE": 0.066,
+    "barrel": 0.115,
+    "pullAir": 0.146,
+    "hard": 0.454,
+    "mPit": 1.113,
+    "parkPF": 92,
+    "pHRperPA": 0.045
+   },
+   "hit_detail": {
+    "xbaCon": 0.322,
+    "ld": 0.235,
+    "kAB": 0.254,
+    "pHitAB": 0.301,
+    "expAB": 4.09
+   }
+  },
+  {
+   "id": 686527,
+   "name": "Dominic Canzone",
+   "team": "SEA",
+   "opp": "MIN",
+   "sp": "Connor Prielipp",
+   "slot": 3,
+   "park": "SEA",
+   "pHR": 0.1588,
+   "pHit": 0.7643,
+   "pHRraw": 0.1588,
+   "pHitRaw": 0.7643,
+   "hr_detail": {
+    "hrBBE": 0.0759,
+    "barrel": 0.131,
+    "pullAir": 0.107,
+    "hard": 0.463,
+    "mPit": 0.999,
+    "parkPF": 92,
+    "pHRperPA": 0.0428
+   },
+   "hit_detail": {
+    "xbaCon": 0.346,
+    "ld": 0.206,
+    "kAB": 0.234,
+    "pHitAB": 0.307,
+    "expAB": 3.99
+   }
+  },
+  {
+   "id": 678246,
+   "name": "Miguel Vargas",
+   "team": "CWS",
+   "opp": "TB",
+   "sp": "Drew Rasmussen",
+   "slot": 3,
+   "park": "TB",
+   "pHR": 0.1576,
+   "pHit": 0.7824,
+   "pHRraw": 0.1576,
+   "pHitRaw": 0.7824,
+   "hr_detail": {
+    "hrBBE": 0.0673,
+    "barrel": 0.135,
+    "pullAir": 0.168,
+    "hard": 0.459,
+    "mPit": 0.883,
+    "parkPF": 93,
+    "pHRperPA": 0.0411
+   },
+   "hit_detail": {
+    "xbaCon": 0.332,
+    "ld": 0.25,
+    "kAB": 0.229,
+    "pHitAB": 0.32,
+    "expAB": 3.98
+   }
+  },
+  {
+   "id": 668904,
+   "name": "Royce Lewis",
+   "team": "MIN",
+   "opp": "SEA",
+   "sp": "Logan Gilbert",
+   "slot": 4,
+   "park": "SEA",
+   "pHR": 0.1529,
+   "pHit": 0.7442,
+   "pHRraw": 0.1529,
+   "pHitRaw": 0.7442,
+   "hr_detail": {
+    "hrBBE": 0.0532,
+    "barrel": 0.111,
+    "pullAir": 0.187,
+    "hard": 0.416,
+    "mPit": 1.113,
+    "parkPF": 92,
+    "pHRperPA": 0.0398
+   },
+   "hit_detail": {
+    "xbaCon": 0.317,
+    "ld": 0.233,
+    "kAB": 0.256,
+    "pHitAB": 0.295,
+    "expAB": 3.9
+   }
+  },
+  {
+   "id": 669065,
+   "name": "Kyle Stowers",
+   "team": "MIA",
+   "opp": "NYM",
+   "sp": "Zac Thornton",
+   "slot": 6,
+   "park": "NYM",
+   "pHR": 0.1525,
+   "pHit": 0.7879,
+   "pHRraw": 0.1525,
+   "pHitRaw": 0.7879,
+   "hr_detail": {
+    "hrBBE": 0.0698,
+    "barrel": 0.115,
+    "pullAir": 0.157,
+    "hard": 0.509,
+    "mPit": 0.987,
+    "parkPF": 96,
+    "pHRperPA": 0.0413
+   },
+   "hit_detail": {
+    "xbaCon": 0.342,
+    "ld": 0.233,
+    "kAB": 0.257,
+    "pHitAB": 0.327,
+    "expAB": 3.71
+   }
+  },
+  {
+   "id": 691406,
+   "name": "Junior Caminero",
+   "team": "TB",
+   "opp": "CWS",
+   "sp": "Jordan Hicks",
+   "slot": 3,
+   "park": "TB",
+   "pHR": 0.1393,
+   "pHit": 0.7716,
+   "pHRraw": 0.1393,
+   "pHitRaw": 0.7716,
+   "hr_detail": {
+    "hrBBE": 0.0843,
+    "barrel": 0.126,
+    "pullAir": 0.16,
+    "hard": 0.486,
+    "mPit": 0.7,
+    "parkPF": 93,
+    "pHRperPA": 0.0362
+   },
+   "hit_detail": {
+    "xbaCon": 0.34,
+    "ld": 0.223,
+    "kAB": 0.224,
+    "pHitAB": 0.315,
+    "expAB": 3.95
+   }
+  },
+  {
+   "id": 665923,
+   "name": "Esteury Ruiz",
+   "team": "MIA",
+   "opp": "NYM",
+   "sp": "Zac Thornton",
+   "slot": 8,
+   "park": "NYM",
+   "pHR": 0.1392,
+   "pHit": 0.7967,
+   "pHRraw": 0.1392,
+   "pHitRaw": 0.7967,
+   "hr_detail": {
+    "hrBBE": 0.0563,
+    "barrel": 0.086,
+    "pullAir": 0.25,
+    "hard": 0.346,
+    "mPit": 0.987,
+    "parkPF": 96,
+    "pHRperPA": 0.0373
+   },
+   "hit_detail": {
+    "xbaCon": 0.331,
+    "ld": 0.257,
+    "kAB": 0.239,
+    "pHitAB": 0.333,
+    "expAB": 3.5
+   }
+  },
+  {
+   "id": 676475,
+   "name": "Alec Burleson",
+   "team": "STL",
+   "opp": "TOR",
+   "sp": "Kevin Gausman",
+   "slot": 3,
+   "park": "TOR",
+   "pHR": 0.1303,
+   "pHit": 0.8324,
+   "pHRraw": 0.1303,
+   "pHitRaw": 0.8324,
+   "hr_detail": {
+    "hrBBE": 0.0435,
+    "barrel": 0.107,
+    "pullAir": 0.113,
+    "hard": 0.475,
+    "mPit": 0.972,
+    "parkPF": 100,
+    "pHRperPA": 0.0336
+   },
+   "hit_detail": {
+    "xbaCon": 0.353,
+    "ld": 0.265,
+    "kAB": 0.214,
+    "pHitAB": 0.369,
+    "expAB": 4.04
+   }
+  },
+  {
+   "id": 663728,
+   "name": "Cal Raleigh",
+   "team": "SEA",
+   "opp": "MIN",
+   "sp": "Connor Prielipp",
+   "slot": 5,
+   "park": "SEA",
+   "pHR": 0.1287,
+   "pHit": 0.6934,
+   "pHRraw": 0.1287,
+   "pHitRaw": 0.6934,
+   "hr_detail": {
+    "hrBBE": 0.0567,
+    "barrel": 0.11,
+    "pullAir": 0.22,
+    "hard": 0.349,
+    "mPit": 0.999,
+    "parkPF": 92,
+    "pHRperPA": 0.0354
+   },
+   "hit_detail": {
+    "xbaCon": 0.304,
+    "ld": 0.24,
+    "kAB": 0.283,
+    "pHitAB": 0.262,
+    "expAB": 3.73
+   }
+  },
+  {
+   "id": 676724,
+   "name": "Jared Young",
+   "team": "NYM",
+   "opp": "MIA",
+   "sp": "Tyler Phillips",
+   "slot": 5,
+   "park": "NYM",
+   "pHR": 0.1263,
+   "pHit": 0.7801,
+   "pHRraw": 0.1263,
+   "pHitRaw": 0.7801,
+   "hr_detail": {
+    "hrBBE": 0.0503,
+    "barrel": 0.092,
+    "pullAir": 0.141,
+    "hard": 0.443,
+    "mPit": 0.938,
+    "parkPF": 96,
+    "pHRperPA": 0.0331
+   },
+   "hit_detail": {
+    "xbaCon": 0.313,
+    "ld": 0.234,
+    "kAB": 0.174,
+    "pHitAB": 0.325,
+    "expAB": 3.8
+   }
+  },
+  {
+   "id": 702284,
+   "name": "Cole Young",
+   "team": "SEA",
+   "opp": "MIN",
+   "sp": "Connor Prielipp",
+   "slot": 1,
+   "park": "SEA",
+   "pHR": 0.1253,
+   "pHit": 0.7766,
+   "pHRraw": 0.1253,
+   "pHitRaw": 0.7766,
+   "hr_detail": {
+    "hrBBE": 0.0428,
+    "barrel": 0.058,
+    "pullAir": 0.154,
+    "hard": 0.392,
+    "mPit": 0.999,
+    "parkPF": 92,
+    "pHRperPA": 0.0256
+   },
+   "hit_detail": {
+    "xbaCon": 0.328,
+    "ld": 0.252,
+    "kAB": 0.197,
+    "pHitAB": 0.321,
+    "expAB": 4.25
+   }
+  },
+  {
+   "id": 802139,
+   "name": "JJ Wetherholt",
+   "team": "STL",
+   "opp": "TOR",
+   "sp": "Kevin Gausman",
+   "slot": 1,
+   "park": "TOR",
+   "pHR": 0.1227,
+   "pHit": 0.7825,
+   "pHRraw": 0.1227,
+   "pHitRaw": 0.7825,
+   "hr_detail": {
+    "hrBBE": 0.0451,
+    "barrel": 0.073,
+    "pullAir": 0.1,
+    "hard": 0.441,
+    "mPit": 0.972,
+    "parkPF": 100,
+    "pHRperPA": 0.0261
+   },
+   "hit_detail": {
+    "xbaCon": 0.318,
+    "ld": 0.223,
+    "kAB": 0.205,
+    "pHitAB": 0.323,
+    "expAB": 4.14
+   }
+  },
+  {
+   "id": 663616,
+   "name": "Trevor Larnach",
+   "team": "MIN",
+   "opp": "SEA",
+   "sp": "Logan Gilbert",
+   "slot": 1,
+   "park": "SEA",
+   "pHR": 0.1217,
+   "pHit": 0.7714,
+   "pHRraw": 0.1217,
+   "pHitRaw": 0.7714,
+   "hr_detail": {
+    "hrBBE": 0.037,
+    "barrel": 0.075,
+    "pullAir": 0.142,
+    "hard": 0.357,
+    "mPit": 1.113,
+    "parkPF": 92,
+    "pHRperPA": 0.0257
+   },
+   "hit_detail": {
+    "xbaCon": 0.323,
+    "ld": 0.245,
+    "kAB": 0.234,
+    "pHitAB": 0.314,
+    "expAB": 4.2
+   }
+  },
+  {
+   "id": 682998,
+   "name": "Corbin Carroll",
+   "team": "AZ",
+   "opp": "CLE",
+   "sp": "Parker Messick",
+   "slot": 1,
+   "park": "CLE",
+   "pHR": 0.1215,
+   "pHit": 0.7345,
+   "pHRraw": 0.1215,
+   "pHitRaw": 0.7345,
+   "hr_detail": {
+    "hrBBE": 0.0502,
+    "barrel": 0.115,
+    "pullAir": 0.165,
+    "hard": 0.477,
+    "mPit": 0.729,
+    "parkPF": 95,
+    "pHRperPA": 0.0263
+   },
+   "hit_detail": {
+    "xbaCon": 0.32,
+    "ld": 0.212,
+    "kAB": 0.242,
+    "pHitAB": 0.287,
+    "expAB": 4.11
+   }
+  },
+  {
    "id": 543807,
    "name": "George Springer",
    "team": "TOR",
@@ -105,6 +743,209 @@
     "kAB": 0.194,
     "pHitAB": 0.335,
     "expAB": 3.9
+   }
+  },
+  {
+   "id": 699625,
+   "name": "Jimmy Crooks",
+   "team": "STL",
+   "opp": "TOR",
+   "sp": "Kevin Gausman",
+   "slot": 9,
+   "park": "TOR",
+   "pHR": 0.1164,
+   "pHit": 0.6553,
+   "pHRraw": 0.1164,
+   "pHitRaw": 0.6553,
+   "hr_detail": {
+    "hrBBE": 0.0501,
+    "barrel": 0.094,
+    "pullAir": 0.124,
+    "hard": 0.469,
+    "mPit": 0.972,
+    "parkPF": 100,
+    "pHRperPA": 0.0299
+   },
+   "hit_detail": {
+    "xbaCon": 0.321,
+    "ld": 0.223,
+    "kAB": 0.259,
+    "pHitAB": 0.304,
+    "expAB": 3.48
+   }
+  },
+  {
+   "id": 641598,
+   "name": "Mitch Garver",
+   "team": "SEA",
+   "opp": "MIN",
+   "sp": "Connor Prielipp",
+   "slot": 7,
+   "park": "SEA",
+   "pHR": 0.1157,
+   "pHit": 0.738,
+   "pHRraw": 0.1157,
+   "pHitRaw": 0.738,
+   "hr_detail": {
+    "hrBBE": 0.0497,
+    "barrel": 0.087,
+    "pullAir": 0.187,
+    "hard": 0.448,
+    "mPit": 0.999,
+    "parkPF": 92,
+    "pHRperPA": 0.0291
+   },
+   "hit_detail": {
+    "xbaCon": 0.328,
+    "ld": 0.248,
+    "kAB": 0.276,
+    "pHitAB": 0.288,
+    "expAB": 3.65
+   }
+  },
+  {
+   "id": 543760,
+   "name": "Marcus Semien",
+   "team": "NYM",
+   "opp": "MIA",
+   "sp": "Tyler Phillips",
+   "slot": 6,
+   "park": "NYM",
+   "pHR": 0.1151,
+   "pHit": 0.7818,
+   "pHRraw": 0.1151,
+   "pHitRaw": 0.7818,
+   "hr_detail": {
+    "hrBBE": 0.0478,
+    "barrel": 0.077,
+    "pullAir": 0.163,
+    "hard": 0.372,
+    "mPit": 0.938,
+    "parkPF": 96,
+    "pHRperPA": 0.0305
+   },
+   "hit_detail": {
+    "xbaCon": 0.323,
+    "ld": 0.235,
+    "kAB": 0.206,
+    "pHitAB": 0.322,
+    "expAB": 3.78
+   }
+  },
+  {
+   "id": 668227,
+   "name": "Randy Arozarena",
+   "team": "SEA",
+   "opp": "MIN",
+   "sp": "Connor Prielipp",
+   "slot": 2,
+   "park": "SEA",
+   "pHR": 0.115,
+   "pHit": 0.7502,
+   "pHRraw": 0.115,
+   "pHitRaw": 0.7502,
+   "hr_detail": {
+    "hrBBE": 0.0454,
+    "barrel": 0.08,
+    "pullAir": 0.087,
+    "hard": 0.417,
+    "mPit": 0.999,
+    "parkPF": 92,
+    "pHRperPA": 0.0231
+   },
+   "hit_detail": {
+    "xbaCon": 0.328,
+    "ld": 0.22,
+    "kAB": 0.227,
+    "pHitAB": 0.299,
+    "expAB": 4.02
+   }
+  },
+  {
+   "id": 677594,
+   "name": "Julio Rodr\u00edguez",
+   "team": "SEA",
+   "opp": "MIN",
+   "sp": "Connor Prielipp",
+   "slot": 4,
+   "park": "SEA",
+   "pHR": 0.1108,
+   "pHit": 0.7694,
+   "pHRraw": 0.1108,
+   "pHitRaw": 0.7694,
+   "hr_detail": {
+    "hrBBE": 0.0509,
+    "barrel": 0.086,
+    "pullAir": 0.106,
+    "hard": 0.425,
+    "mPit": 0.999,
+    "parkPF": 92,
+    "pHRperPA": 0.0289
+   },
+   "hit_detail": {
+    "xbaCon": 0.331,
+    "ld": 0.238,
+    "kAB": 0.22,
+    "pHitAB": 0.31,
+    "expAB": 3.98
+   }
+  },
+  {
+   "id": 643217,
+   "name": "Andrew Benintendi",
+   "team": "CWS",
+   "opp": "TB",
+   "sp": "Drew Rasmussen",
+   "slot": 5,
+   "park": "TB",
+   "pHR": 0.1088,
+   "pHit": 0.7568,
+   "pHRraw": 0.1088,
+   "pHitRaw": 0.7568,
+   "hr_detail": {
+    "hrBBE": 0.0485,
+    "barrel": 0.087,
+    "pullAir": 0.188,
+    "hard": 0.443,
+    "mPit": 0.883,
+    "parkPF": 93,
+    "pHRperPA": 0.0289
+   },
+   "hit_detail": {
+    "xbaCon": 0.317,
+    "ld": 0.246,
+    "kAB": 0.236,
+    "pHitAB": 0.302,
+    "expAB": 3.81
+   }
+  },
+  {
+   "id": 805999,
+   "name": "A.J. Ewing",
+   "team": "NYM",
+   "opp": "MIA",
+   "sp": "Tyler Phillips",
+   "slot": 1,
+   "park": "NYM",
+   "pHR": 0.1045,
+   "pHit": 0.7908,
+   "pHRraw": 0.1045,
+   "pHitRaw": 0.7908,
+   "hr_detail": {
+    "hrBBE": 0.0405,
+    "barrel": 0.074,
+    "pullAir": 0.092,
+    "hard": 0.414,
+    "mPit": 0.938,
+    "parkPF": 96,
+    "pHRperPA": 0.0219
+   },
+   "hit_detail": {
+    "xbaCon": 0.326,
+    "ld": 0.244,
+    "kAB": 0.202,
+    "pHitAB": 0.33,
+    "expAB": 4.21
    }
   },
   {
@@ -137,6 +978,325 @@
    }
   },
   {
+   "id": 686797,
+   "name": "Brooks Lee",
+   "team": "MIN",
+   "opp": "SEA",
+   "sp": "Logan Gilbert",
+   "slot": 5,
+   "park": "SEA",
+   "pHR": 0.1005,
+   "pHit": 0.7116,
+   "pHRraw": 0.1005,
+   "pHitRaw": 0.7116,
+   "hr_detail": {
+    "hrBBE": 0.0487,
+    "barrel": 0.044,
+    "pullAir": 0.144,
+    "hard": 0.324,
+    "mPit": 1.113,
+    "parkPF": 92,
+    "pHRperPA": 0.027
+   },
+   "hit_detail": {
+    "xbaCon": 0.28,
+    "ld": 0.219,
+    "kAB": 0.222,
+    "pHitAB": 0.269,
+    "expAB": 3.86
+   }
+  },
+  {
+   "id": 683748,
+   "name": "Victor Mesa Jr.",
+   "team": "TB",
+   "opp": "CWS",
+   "sp": "Jordan Hicks",
+   "slot": 4,
+   "park": "TB",
+   "pHR": 0.0999,
+   "pHit": 0.7317,
+   "pHRraw": 0.0999,
+   "pHitRaw": 0.7317,
+   "hr_detail": {
+    "hrBBE": 0.0724,
+    "barrel": 0.093,
+    "pullAir": 0.143,
+    "hard": 0.395,
+    "mPit": 0.7,
+    "parkPF": 93,
+    "pHRperPA": 0.0264
+   },
+   "hit_detail": {
+    "xbaCon": 0.314,
+    "ld": 0.23,
+    "kAB": 0.257,
+    "pHitAB": 0.281,
+    "expAB": 3.93
+   }
+  },
+  {
+   "id": 668952,
+   "name": "Ryan Kreidler",
+   "team": "MIN",
+   "opp": "SEA",
+   "sp": "Logan Gilbert",
+   "slot": 8,
+   "park": "SEA",
+   "pHR": 0.0974,
+   "pHit": 0.7316,
+   "pHRraw": 0.0974,
+   "pHitRaw": 0.7316,
+   "hr_detail": {
+    "hrBBE": 0.0402,
+    "barrel": 0.077,
+    "pullAir": 0.084,
+    "hard": 0.372,
+    "mPit": 1.113,
+    "parkPF": 92,
+    "pHRperPA": 0.024
+   },
+   "hit_detail": {
+    "xbaCon": 0.314,
+    "ld": 0.211,
+    "kAB": 0.252,
+    "pHitAB": 0.287,
+    "expAB": 3.64
+   }
+  },
+  {
+   "id": 606466,
+   "name": "Ketel Marte",
+   "team": "AZ",
+   "opp": "CLE",
+   "sp": "Parker Messick",
+   "slot": 4,
+   "park": "CLE",
+   "pHR": 0.097,
+   "pHit": 0.7417,
+   "pHRraw": 0.097,
+   "pHitRaw": 0.7417,
+   "hr_detail": {
+    "hrBBE": 0.052,
+    "barrel": 0.1,
+    "pullAir": 0.142,
+    "hard": 0.432,
+    "mPit": 0.729,
+    "parkPF": 95,
+    "pHRperPA": 0.0272
+   },
+   "hit_detail": {
+    "xbaCon": 0.313,
+    "ld": 0.214,
+    "kAB": 0.21,
+    "pHitAB": 0.293,
+    "expAB": 3.97
+   }
+  },
+  {
+   "id": 642215,
+   "name": "Weston Wilson",
+   "team": "SEA",
+   "opp": "MIN",
+   "sp": "Connor Prielipp",
+   "slot": 8,
+   "park": "SEA",
+   "pHR": 0.0965,
+   "pHit": 0.706,
+   "pHRraw": 0.0965,
+   "pHitRaw": 0.706,
+   "hr_detail": {
+    "hrBBE": 0.0497,
+    "barrel": 0.067,
+    "pullAir": 0.141,
+    "hard": 0.343,
+    "mPit": 0.999,
+    "parkPF": 92,
+    "pHRperPA": 0.0246
+   },
+   "hit_detail": {
+    "xbaCon": 0.306,
+    "ld": 0.218,
+    "kAB": 0.265,
+    "pHitAB": 0.264,
+    "expAB": 3.57
+   }
+  },
+  {
+   "id": 701675,
+   "name": "Nathan Church",
+   "team": "STL",
+   "opp": "TOR",
+   "sp": "Kevin Gausman",
+   "slot": 7,
+   "park": "TOR",
+   "pHR": 0.0953,
+   "pHit": 0.7559,
+   "pHRraw": 0.0953,
+   "pHitRaw": 0.7559,
+   "hr_detail": {
+    "hrBBE": 0.0387,
+    "barrel": 0.075,
+    "pullAir": 0.102,
+    "hard": 0.337,
+    "mPit": 0.972,
+    "parkPF": 100,
+    "pHRperPA": 0.0239
+   },
+   "hit_detail": {
+    "xbaCon": 0.302,
+    "ld": 0.228,
+    "kAB": 0.225,
+    "pHitAB": 0.301,
+    "expAB": 3.71
+   }
+  },
+  {
+   "id": 672640,
+   "name": "Otto Lopez",
+   "team": "MIA",
+   "opp": "NYM",
+   "sp": "Zac Thornton",
+   "slot": 1,
+   "park": "NYM",
+   "pHR": 0.0938,
+   "pHit": 0.8058,
+   "pHRraw": 0.0938,
+   "pHitRaw": 0.8058,
+   "hr_detail": {
+    "hrBBE": 0.0272,
+    "barrel": 0.069,
+    "pullAir": 0.075,
+    "hard": 0.417,
+    "mPit": 0.987,
+    "parkPF": 96,
+    "pHRperPA": 0.0199
+   },
+   "hit_detail": {
+    "xbaCon": 0.313,
+    "ld": 0.247,
+    "kAB": 0.164,
+    "pHitAB": 0.342,
+    "expAB": 4.27
+   }
+  },
+  {
+   "id": 668723,
+   "name": "Ryan Vilade",
+   "team": "TB",
+   "opp": "CWS",
+   "sp": "Jordan Hicks",
+   "slot": 6,
+   "park": "TB",
+   "pHR": 0.0926,
+   "pHit": 0.7318,
+   "pHRraw": 0.0926,
+   "pHitRaw": 0.7318,
+   "hr_detail": {
+    "hrBBE": 0.0637,
+    "barrel": 0.069,
+    "pullAir": 0.159,
+    "hard": 0.383,
+    "mPit": 0.7,
+    "parkPF": 93,
+    "pHRperPA": 0.0236
+   },
+   "hit_detail": {
+    "xbaCon": 0.319,
+    "ld": 0.225,
+    "kAB": 0.257,
+    "pHitAB": 0.283,
+    "expAB": 3.76
+   }
+  },
+  {
+   "id": 689414,
+   "name": "Liam Hicks",
+   "team": "MIA",
+   "opp": "NYM",
+   "sp": "Zac Thornton",
+   "slot": 3,
+   "park": "NYM",
+   "pHR": 0.0925,
+   "pHit": 0.754,
+   "pHRraw": 0.0925,
+   "pHitRaw": 0.754,
+   "hr_detail": {
+    "hrBBE": 0.0446,
+    "barrel": 0.045,
+    "pullAir": 0.123,
+    "hard": 0.313,
+    "mPit": 0.987,
+    "parkPF": 96,
+    "pHRperPA": 0.0244
+   },
+   "hit_detail": {
+    "xbaCon": 0.289,
+    "ld": 0.21,
+    "kAB": 0.16,
+    "pHitAB": 0.306,
+    "expAB": 3.96
+   }
+  },
+  {
+   "id": 701807,
+   "name": "Carson Benge",
+   "team": "NYM",
+   "opp": "MIA",
+   "sp": "Tyler Phillips",
+   "slot": 4,
+   "park": "NYM",
+   "pHR": 0.0896,
+   "pHit": 0.8139,
+   "pHRraw": 0.0896,
+   "pHitRaw": 0.8139,
+   "hr_detail": {
+    "hrBBE": 0.0382,
+    "barrel": 0.077,
+    "pullAir": 0.087,
+    "hard": 0.411,
+    "mPit": 0.938,
+    "parkPF": 96,
+    "pHRperPA": 0.0224
+   },
+   "hit_detail": {
+    "xbaCon": 0.346,
+    "ld": 0.236,
+    "kAB": 0.193,
+    "pHitAB": 0.351,
+    "expAB": 3.94
+   }
+  },
+  {
+   "id": 605170,
+   "name": "Victor Caratini",
+   "team": "MIN",
+   "opp": "SEA",
+   "sp": "Logan Gilbert",
+   "slot": 7,
+   "park": "SEA",
+   "pHR": 0.0878,
+   "pHit": 0.7475,
+   "pHRraw": 0.0878,
+   "pHitRaw": 0.7475,
+   "hr_detail": {
+    "hrBBE": 0.0365,
+    "barrel": 0.07,
+    "pullAir": 0.117,
+    "hard": 0.393,
+    "mPit": 1.113,
+    "parkPF": 92,
+    "pHRperPA": 0.0234
+   },
+   "hit_detail": {
+    "xbaCon": 0.309,
+    "ld": 0.262,
+    "kAB": 0.253,
+    "pHitAB": 0.298,
+    "expAB": 3.68
+   }
+  },
+  {
    "id": 662139,
    "name": "Daulton Varsho",
    "team": "TOR",
@@ -163,6 +1323,35 @@
     "kAB": 0.2,
     "pHitAB": 0.302,
     "expAB": 3.8
+   }
+  },
+  {
+   "id": 806068,
+   "name": "Colt Emerson",
+   "team": "SEA",
+   "opp": "MIN",
+   "sp": "Connor Prielipp",
+   "slot": 9,
+   "park": "SEA",
+   "pHR": 0.0866,
+   "pHit": 0.7216,
+   "pHRraw": 0.0866,
+   "pHitRaw": 0.7216,
+   "hr_detail": {
+    "hrBBE": 0.0534,
+    "barrel": 0.059,
+    "pullAir": 0.111,
+    "hard": 0.321,
+    "mPit": 0.999,
+    "parkPF": 92,
+    "pHRperPA": 0.0223
+   },
+   "hit_detail": {
+    "xbaCon": 0.321,
+    "ld": 0.241,
+    "kAB": 0.282,
+    "pHitAB": 0.278,
+    "expAB": 3.53
    }
   },
   {
@@ -195,6 +1384,64 @@
    }
   },
   {
+   "id": 671056,
+   "name": "Iv\u00e1n Herrera",
+   "team": "STL",
+   "opp": "TOR",
+   "sp": "Kevin Gausman",
+   "slot": 4,
+   "park": "TOR",
+   "pHR": 0.0842,
+   "pHit": 0.7652,
+   "pHRraw": 0.0842,
+   "pHitRaw": 0.7652,
+   "hr_detail": {
+    "hrBBE": 0.0385,
+    "barrel": 0.059,
+    "pullAir": 0.116,
+    "hard": 0.394,
+    "mPit": 0.972,
+    "parkPF": 100,
+    "pHRperPA": 0.0214
+   },
+   "hit_detail": {
+    "xbaCon": 0.308,
+    "ld": 0.24,
+    "kAB": 0.225,
+    "pHitAB": 0.311,
+    "expAB": 3.93
+   }
+  },
+  {
+   "id": 571448,
+   "name": "Nolan Arenado",
+   "team": "AZ",
+   "opp": "CLE",
+   "sp": "Parker Messick",
+   "slot": 5,
+   "park": "CLE",
+   "pHR": 0.0841,
+   "pHit": 0.7307,
+   "pHRraw": 0.0841,
+   "pHitRaw": 0.7307,
+   "hr_detail": {
+    "hrBBE": 0.05,
+    "barrel": 0.071,
+    "pullAir": 0.168,
+    "hard": 0.34,
+    "mPit": 0.729,
+    "parkPF": 95,
+    "pHRperPA": 0.0217
+   },
+   "hit_detail": {
+    "xbaCon": 0.311,
+    "ld": 0.22,
+    "kAB": 0.241,
+    "pHitAB": 0.282,
+    "expAB": 3.8
+   }
+  },
+  {
    "id": 672386,
    "name": "Alejandro Kirk",
    "team": "TOR",
@@ -221,6 +1468,267 @@
     "kAB": 0.194,
     "pHitAB": 0.322,
     "expAB": 3.81
+   }
+  },
+  {
+   "id": 663457,
+   "name": "Lars Nootbaar",
+   "team": "STL",
+   "opp": "TOR",
+   "sp": "Kevin Gausman",
+   "slot": 5,
+   "park": "TOR",
+   "pHR": 0.0801,
+   "pHit": 0.7471,
+   "pHRraw": 0.0801,
+   "pHitRaw": 0.7471,
+   "hr_detail": {
+    "hrBBE": 0.0336,
+    "barrel": 0.087,
+    "pullAir": 0.078,
+    "hard": 0.467,
+    "mPit": 0.972,
+    "parkPF": 100,
+    "pHRperPA": 0.0212
+   },
+   "hit_detail": {
+    "xbaCon": 0.304,
+    "ld": 0.216,
+    "kAB": 0.239,
+    "pHitAB": 0.294,
+    "expAB": 3.76
+   }
+  },
+  {
+   "id": 803011,
+   "name": "Sam Antonacci",
+   "team": "CWS",
+   "opp": "TB",
+   "sp": "Drew Rasmussen",
+   "slot": 1,
+   "park": "TB",
+   "pHR": 0.0768,
+   "pHit": 0.7609,
+   "pHRraw": 0.0768,
+   "pHitRaw": 0.7609,
+   "hr_detail": {
+    "hrBBE": 0.0339,
+    "barrel": 0.066,
+    "pullAir": 0.083,
+    "hard": 0.368,
+    "mPit": 0.883,
+    "parkPF": 93,
+    "pHRperPA": 0.0165
+   },
+   "hit_detail": {
+    "xbaCon": 0.318,
+    "ld": 0.23,
+    "kAB": 0.219,
+    "pHitAB": 0.304,
+    "expAB": 4.18
+   }
+  },
+  {
+   "id": 650490,
+   "name": "Yandy D\u00edaz",
+   "team": "TB",
+   "opp": "CWS",
+   "sp": "Jordan Hicks",
+   "slot": 1,
+   "park": "TB",
+   "pHR": 0.0761,
+   "pHit": 0.7571,
+   "pHRraw": 0.0761,
+   "pHitRaw": 0.7571,
+   "hr_detail": {
+    "hrBBE": 0.0442,
+    "barrel": 0.072,
+    "pullAir": 0.063,
+    "hard": 0.457,
+    "mPit": 0.7,
+    "parkPF": 93,
+    "pHRperPA": 0.0161
+   },
+   "hit_detail": {
+    "xbaCon": 0.32,
+    "ld": 0.241,
+    "kAB": 0.224,
+    "pHitAB": 0.302,
+    "expAB": 4.21
+   }
+  },
+  {
+   "id": 691458,
+   "name": "Blaze Jordan",
+   "team": "STL",
+   "opp": "TOR",
+   "sp": "Kevin Gausman",
+   "slot": 8,
+   "park": "TOR",
+   "pHR": 0.0759,
+   "pHit": 0.7974,
+   "pHRraw": 0.0759,
+   "pHitRaw": 0.7974,
+   "hr_detail": {
+    "hrBBE": 0.0225,
+    "barrel": 0.077,
+    "pullAir": 0.11,
+    "hard": 0.421,
+    "mPit": 0.972,
+    "parkPF": 100,
+    "pHRperPA": 0.0207
+   },
+   "hit_detail": {
+    "xbaCon": 0.309,
+    "ld": 0.262,
+    "kAB": 0.202,
+    "pHitAB": 0.329,
+    "expAB": 3.63
+   }
+  },
+  {
+   "id": 666182,
+   "name": "Bo Bichette",
+   "team": "NYM",
+   "opp": "MIA",
+   "sp": "Tyler Phillips",
+   "slot": 3,
+   "park": "NYM",
+   "pHR": 0.0753,
+   "pHit": 0.8032,
+   "pHRraw": 0.0753,
+   "pHitRaw": 0.8032,
+   "hr_detail": {
+    "hrBBE": 0.0305,
+    "barrel": 0.064,
+    "pullAir": 0.072,
+    "hard": 0.404,
+    "mPit": 0.938,
+    "parkPF": 96,
+    "pHRperPA": 0.0188
+   },
+   "hit_detail": {
+    "xbaCon": 0.32,
+    "ld": 0.25,
+    "kAB": 0.171,
+    "pHitAB": 0.339,
+    "expAB": 4.09
+   }
+  },
+  {
+   "id": 683146,
+   "name": "Brett Baty",
+   "team": "NYM",
+   "opp": "MIA",
+   "sp": "Tyler Phillips",
+   "slot": 7,
+   "park": "NYM",
+   "pHR": 0.0739,
+   "pHit": 0.7838,
+   "pHRraw": 0.0739,
+   "pHitRaw": 0.7838,
+   "hr_detail": {
+    "hrBBE": 0.0306,
+    "barrel": 0.083,
+    "pullAir": 0.081,
+    "hard": 0.391,
+    "mPit": 0.938,
+    "parkPF": 96,
+    "pHRperPA": 0.019
+   },
+   "hit_detail": {
+    "xbaCon": 0.321,
+    "ld": 0.232,
+    "kAB": 0.2,
+    "pHitAB": 0.322,
+    "expAB": 3.67
+   }
+  },
+  {
+   "id": 677870,
+   "name": "Leo Jim\u00e9nez",
+   "team": "MIA",
+   "opp": "NYM",
+   "sp": "Zac Thornton",
+   "slot": 5,
+   "park": "NYM",
+   "pHR": 0.0726,
+   "pHit": 0.7992,
+   "pHRraw": 0.0726,
+   "pHitRaw": 0.7992,
+   "hr_detail": {
+    "hrBBE": 0.0308,
+    "barrel": 0.064,
+    "pullAir": 0.093,
+    "hard": 0.434,
+    "mPit": 0.987,
+    "parkPF": 96,
+    "pHRperPA": 0.0187
+   },
+   "hit_detail": {
+    "xbaCon": 0.317,
+    "ld": 0.257,
+    "kAB": 0.197,
+    "pHitAB": 0.337,
+    "expAB": 3.79
+   }
+  },
+  {
+   "id": 694374,
+   "name": "Tim Tawa",
+   "team": "AZ",
+   "opp": "CLE",
+   "sp": "Parker Messick",
+   "slot": 6,
+   "park": "CLE",
+   "pHR": 0.0714,
+   "pHit": 0.7134,
+   "pHRraw": 0.0714,
+   "pHitRaw": 0.7134,
+   "hr_detail": {
+    "hrBBE": 0.0412,
+    "barrel": 0.072,
+    "pullAir": 0.136,
+    "hard": 0.401,
+    "mPit": 0.729,
+    "parkPF": 95,
+    "pHRperPA": 0.0184
+   },
+   "hit_detail": {
+    "xbaCon": 0.302,
+    "ld": 0.206,
+    "kAB": 0.234,
+    "pHitAB": 0.272,
+    "expAB": 3.8
+   }
+  },
+  {
+   "id": 543510,
+   "name": "James McCann",
+   "team": "AZ",
+   "opp": "CLE",
+   "sp": "Parker Messick",
+   "slot": 8,
+   "park": "CLE",
+   "pHR": 0.0713,
+   "pHit": 0.7565,
+   "pHRraw": 0.0713,
+   "pHitRaw": 0.7565,
+   "hr_detail": {
+    "hrBBE": 0.0465,
+    "barrel": 0.079,
+    "pullAir": 0.099,
+    "hard": 0.41,
+    "mPit": 0.729,
+    "parkPF": 95,
+    "pHRperPA": 0.0191
+   },
+   "hit_detail": {
+    "xbaCon": 0.331,
+    "ld": 0.224,
+    "kAB": 0.238,
+    "pHitAB": 0.303,
+    "expAB": 3.59
    }
   },
   {
@@ -279,6 +1787,586 @@
     "kAB": 0.192,
     "pHitAB": 0.323,
     "expAB": 3.59
+   }
+  },
+  {
+   "id": 671976,
+   "name": "Tristan Peters",
+   "team": "CWS",
+   "opp": "TB",
+   "sp": "Drew Rasmussen",
+   "slot": 7,
+   "park": "TB",
+   "pHR": 0.0645,
+   "pHit": 0.7168,
+   "pHRraw": 0.0645,
+   "pHitRaw": 0.7168,
+   "hr_detail": {
+    "hrBBE": 0.0291,
+    "barrel": 0.056,
+    "pullAir": 0.168,
+    "hard": 0.323,
+    "mPit": 0.883,
+    "parkPF": 93,
+    "pHRperPA": 0.0174
+   },
+   "hit_detail": {
+    "xbaCon": 0.298,
+    "ld": 0.209,
+    "kAB": 0.231,
+    "pHitAB": 0.274,
+    "expAB": 3.68
+   }
+  },
+  {
+   "id": 676356,
+   "name": "Jonny DeLuca",
+   "team": "TB",
+   "opp": "CWS",
+   "sp": "Jordan Hicks",
+   "slot": 5,
+   "park": "TB",
+   "pHR": 0.0634,
+   "pHit": 0.7512,
+   "pHRraw": 0.0634,
+   "pHitRaw": 0.7512,
+   "hr_detail": {
+    "hrBBE": 0.044,
+    "barrel": 0.053,
+    "pullAir": 0.128,
+    "hard": 0.319,
+    "mPit": 0.7,
+    "parkPF": 93,
+    "pHRperPA": 0.0161
+   },
+   "hit_detail": {
+    "xbaCon": 0.319,
+    "ld": 0.248,
+    "kAB": 0.233,
+    "pHitAB": 0.299,
+    "expAB": 3.9
+   }
+  },
+  {
+   "id": 805367,
+   "name": "Chase Meidroth",
+   "team": "CWS",
+   "opp": "TB",
+   "sp": "Drew Rasmussen",
+   "slot": 8,
+   "park": "TB",
+   "pHR": 0.0627,
+   "pHit": 0.7427,
+   "pHRraw": 0.0627,
+   "pHitRaw": 0.7427,
+   "hr_detail": {
+    "hrBBE": 0.0331,
+    "barrel": 0.053,
+    "pullAir": 0.119,
+    "hard": 0.36,
+    "mPit": 0.883,
+    "parkPF": 93,
+    "pHRperPA": 0.0154
+   },
+   "hit_detail": {
+    "xbaCon": 0.309,
+    "ld": 0.239,
+    "kAB": 0.235,
+    "pHitAB": 0.292,
+    "expAB": 3.52
+   }
+  },
+  {
+   "id": 647304,
+   "name": "Josh Naylor",
+   "team": "SEA",
+   "opp": "MIN",
+   "sp": "Connor Prielipp",
+   "slot": 6,
+   "park": "SEA",
+   "pHR": 0.0624,
+   "pHit": 0.781,
+   "pHRraw": 0.0624,
+   "pHitRaw": 0.781,
+   "hr_detail": {
+    "hrBBE": 0.0261,
+    "barrel": 0.05,
+    "pullAir": 0.117,
+    "hard": 0.368,
+    "mPit": 0.999,
+    "parkPF": 92,
+    "pHRperPA": 0.017
+   },
+   "hit_detail": {
+    "xbaCon": 0.326,
+    "ld": 0.245,
+    "kAB": 0.184,
+    "pHitAB": 0.322,
+    "expAB": 3.76
+   }
+  },
+  {
+   "id": 672515,
+   "name": "Gabriel Moreno",
+   "team": "AZ",
+   "opp": "CLE",
+   "sp": "Parker Messick",
+   "slot": 3,
+   "park": "CLE",
+   "pHR": 0.0609,
+   "pHit": 0.8138,
+   "pHRraw": 0.0609,
+   "pHitRaw": 0.8138,
+   "hr_detail": {
+    "hrBBE": 0.0351,
+    "barrel": 0.078,
+    "pullAir": 0.092,
+    "hard": 0.424,
+    "mPit": 0.729,
+    "parkPF": 95,
+    "pHRperPA": 0.0163
+   },
+   "hit_detail": {
+    "xbaCon": 0.344,
+    "ld": 0.262,
+    "kAB": 0.191,
+    "pHitAB": 0.348,
+    "expAB": 3.92
+   }
+  },
+  {
+   "id": 695731,
+   "name": "Braden Montgomery",
+   "team": "CWS",
+   "opp": "TB",
+   "sp": "Drew Rasmussen",
+   "slot": 6,
+   "park": "TB",
+   "pHR": 0.0584,
+   "pHit": 0.7418,
+   "pHRraw": 0.0584,
+   "pHitRaw": 0.7418,
+   "hr_detail": {
+    "hrBBE": 0.0314,
+    "barrel": 0.048,
+    "pullAir": 0.105,
+    "hard": 0.404,
+    "mPit": 0.883,
+    "parkPF": 93,
+    "pHRperPA": 0.0146
+   },
+   "hit_detail": {
+    "xbaCon": 0.318,
+    "ld": 0.205,
+    "kAB": 0.235,
+    "pHitAB": 0.29,
+    "expAB": 3.71
+   }
+  },
+  {
+   "id": 672695,
+   "name": "Geraldo Perdomo",
+   "team": "AZ",
+   "opp": "CLE",
+   "sp": "Parker Messick",
+   "slot": 2,
+   "park": "CLE",
+   "pHR": 0.054,
+   "pHit": 0.7364,
+   "pHRraw": 0.054,
+   "pHitRaw": 0.7364,
+   "hr_detail": {
+    "hrBBE": 0.0276,
+    "barrel": 0.038,
+    "pullAir": 0.127,
+    "hard": 0.303,
+    "mPit": 0.729,
+    "parkPF": 95,
+    "pHRperPA": 0.011
+   },
+   "hit_detail": {
+    "xbaCon": 0.291,
+    "ld": 0.236,
+    "kAB": 0.191,
+    "pHitAB": 0.286,
+    "expAB": 3.94
+   }
+  },
+  {
+   "id": 669364,
+   "name": "Xavier Edwards",
+   "team": "MIA",
+   "opp": "NYM",
+   "sp": "Zac Thornton",
+   "slot": 4,
+   "park": "NYM",
+   "pHR": 0.0513,
+   "pHit": 0.7836,
+   "pHRraw": 0.0513,
+   "pHitRaw": 0.7836,
+   "hr_detail": {
+    "hrBBE": 0.0214,
+    "barrel": 0.046,
+    "pullAir": 0.072,
+    "hard": 0.3,
+    "mPit": 0.987,
+    "parkPF": 96,
+    "pHRperPA": 0.0129
+   },
+   "hit_detail": {
+    "xbaCon": 0.306,
+    "ld": 0.244,
+    "kAB": 0.19,
+    "pHitAB": 0.323,
+    "expAB": 3.9
+   }
+  },
+  {
+   "id": 691594,
+   "name": "Javier Sanoja",
+   "team": "MIA",
+   "opp": "NYM",
+   "sp": "Zac Thornton",
+   "slot": 7,
+   "park": "NYM",
+   "pHR": 0.0505,
+   "pHit": 0.7793,
+   "pHRraw": 0.0505,
+   "pHitRaw": 0.7793,
+   "hr_detail": {
+    "hrBBE": 0.0185,
+    "barrel": 0.028,
+    "pullAir": 0.153,
+    "hard": 0.332,
+    "mPit": 0.987,
+    "parkPF": 96,
+    "pHRperPA": 0.0133
+   },
+   "hit_detail": {
+    "xbaCon": 0.289,
+    "ld": 0.25,
+    "kAB": 0.147,
+    "pHitAB": 0.324,
+    "expAB": 3.73
+   }
+  },
+  {
+   "id": 545121,
+   "name": "Ildemaro Vargas",
+   "team": "AZ",
+   "opp": "CLE",
+   "sp": "Parker Messick",
+   "slot": 7,
+   "park": "CLE",
+   "pHR": 0.0475,
+   "pHit": 0.8005,
+   "pHRraw": 0.0475,
+   "pHitRaw": 0.8005,
+   "hr_detail": {
+    "hrBBE": 0.0281,
+    "barrel": 0.04,
+    "pullAir": 0.096,
+    "hard": 0.36,
+    "mPit": 0.729,
+    "parkPF": 95,
+    "pHRperPA": 0.012
+   },
+   "hit_detail": {
+    "xbaCon": 0.325,
+    "ld": 0.284,
+    "kAB": 0.182,
+    "pHitAB": 0.34,
+    "expAB": 3.66
+   }
+  },
+  {
+   "id": 620443,
+   "name": "Luis Torrens",
+   "team": "NYM",
+   "opp": "MIA",
+   "sp": "Tyler Phillips",
+   "slot": 9,
+   "park": "NYM",
+   "pHR": 0.0457,
+   "pHit": 0.6912,
+   "pHRraw": 0.0457,
+   "pHitRaw": 0.6912,
+   "hr_detail": {
+    "hrBBE": 0.0236,
+    "barrel": 0.049,
+    "pullAir": 0.066,
+    "hard": 0.387,
+    "mPit": 0.938,
+    "parkPF": 96,
+    "pHRperPA": 0.0132
+   },
+   "hit_detail": {
+    "xbaCon": 0.315,
+    "ld": 0.258,
+    "kAB": 0.178,
+    "pHitAB": 0.333,
+    "expAB": 3.47
+   }
+  },
+  {
+   "id": 814439,
+   "name": "Ryan Waldschmidt",
+   "team": "AZ",
+   "opp": "CLE",
+   "sp": "Parker Messick",
+   "slot": 9,
+   "park": "CLE",
+   "pHR": 0.045,
+   "pHit": 0.7795,
+   "pHRraw": 0.045,
+   "pHitRaw": 0.7795,
+   "hr_detail": {
+    "hrBBE": 0.0237,
+    "barrel": 0.081,
+    "pullAir": 0.103,
+    "hard": 0.366,
+    "mPit": 0.729,
+    "parkPF": 95,
+    "pHRperPA": 0.0124
+   },
+   "hit_detail": {
+    "xbaCon": 0.343,
+    "ld": 0.272,
+    "kAB": 0.267,
+    "pHitAB": 0.318,
+    "expAB": 3.53
+   }
+  },
+  {
+   "id": 691026,
+   "name": "Masyn Winn",
+   "team": "STL",
+   "opp": "TOR",
+   "sp": "Kevin Gausman",
+   "slot": 6,
+   "park": "TOR",
+   "pHR": 0.0441,
+   "pHit": 0.786,
+   "pHRraw": 0.0441,
+   "pHitRaw": 0.786,
+   "hr_detail": {
+    "hrBBE": 0.0192,
+    "barrel": 0.039,
+    "pullAir": 0.075,
+    "hard": 0.364,
+    "mPit": 0.972,
+    "parkPF": 100,
+    "pHRperPA": 0.011
+   },
+   "hit_detail": {
+    "xbaCon": 0.319,
+    "ld": 0.261,
+    "kAB": 0.226,
+    "pHitAB": 0.328,
+    "expAB": 3.72
+   }
+  },
+  {
+   "id": 807712,
+   "name": "Luke Keaschall",
+   "team": "MIN",
+   "opp": "SEA",
+   "sp": "Logan Gilbert",
+   "slot": 6,
+   "park": "SEA",
+   "pHR": 0.0439,
+   "pHit": 0.7602,
+   "pHRraw": 0.0439,
+   "pHitRaw": 0.7602,
+   "hr_detail": {
+    "hrBBE": 0.0194,
+    "barrel": 0.037,
+    "pullAir": 0.101,
+    "hard": 0.307,
+    "mPit": 1.113,
+    "parkPF": 92,
+    "pHRperPA": 0.0118
+   },
+   "hit_detail": {
+    "xbaCon": 0.307,
+    "ld": 0.248,
+    "kAB": 0.224,
+    "pHitAB": 0.303,
+    "expAB": 3.62
+   }
+  },
+  {
+   "id": 700337,
+   "name": "Edgar Quero",
+   "team": "CWS",
+   "opp": "TB",
+   "sp": "Drew Rasmussen",
+   "slot": 9,
+   "park": "TB",
+   "pHR": 0.0426,
+   "pHit": 0.7478,
+   "pHRraw": 0.0426,
+   "pHitRaw": 0.7478,
+   "hr_detail": {
+    "hrBBE": 0.0247,
+    "barrel": 0.04,
+    "pullAir": 0.08,
+    "hard": 0.374,
+    "mPit": 0.883,
+    "parkPF": 93,
+    "pHRperPA": 0.0108
+   },
+   "hit_detail": {
+    "xbaCon": 0.315,
+    "ld": 0.224,
+    "kAB": 0.224,
+    "pHitAB": 0.297,
+    "expAB": 3.5
+   }
+  },
+  {
+   "id": 663743,
+   "name": "Nick Fortes",
+   "team": "TB",
+   "opp": "CWS",
+   "sp": "Jordan Hicks",
+   "slot": 8,
+   "park": "TB",
+   "pHR": 0.0401,
+   "pHit": 0.7436,
+   "pHRraw": 0.0401,
+   "pHitRaw": 0.7436,
+   "hr_detail": {
+    "hrBBE": 0.0253,
+    "barrel": 0.037,
+    "pullAir": 0.121,
+    "hard": 0.371,
+    "mPit": 0.7,
+    "parkPF": 93,
+    "pHRperPA": 0.0106
+   },
+   "hit_detail": {
+    "xbaCon": 0.311,
+    "ld": 0.228,
+    "kAB": 0.211,
+    "pHitAB": 0.294,
+    "expAB": 3.62
+   }
+  },
+  {
+   "id": 668885,
+   "name": "Austin Martin",
+   "team": "MIN",
+   "opp": "SEA",
+   "sp": "Logan Gilbert",
+   "slot": 9,
+   "park": "SEA",
+   "pHR": 0.0389,
+   "pHit": 0.6302,
+   "pHRraw": 0.0389,
+   "pHitRaw": 0.6302,
+   "hr_detail": {
+    "hrBBE": 0.0181,
+    "barrel": 0.034,
+    "pullAir": 0.108,
+    "hard": 0.313,
+    "mPit": 1.113,
+    "parkPF": 92,
+    "pHRperPA": 0.0105
+   },
+   "hit_detail": {
+    "xbaCon": 0.306,
+    "ld": 0.238,
+    "kAB": 0.247,
+    "pHitAB": 0.29,
+    "expAB": 3.38
+   }
+  },
+  {
+   "id": 810938,
+   "name": "Ben Williamson",
+   "team": "TB",
+   "opp": "CWS",
+   "sp": "Jordan Hicks",
+   "slot": 7,
+   "park": "TB",
+   "pHR": 0.0252,
+   "pHit": 0.7604,
+   "pHRraw": 0.0252,
+   "pHitRaw": 0.7604,
+   "hr_detail": {
+    "hrBBE": 0.0192,
+    "barrel": 0.031,
+    "pullAir": 0.05,
+    "hard": 0.347,
+    "mPit": 0.7,
+    "parkPF": 93,
+    "pHRperPA": 0.0063
+   },
+   "hit_detail": {
+    "xbaCon": 0.324,
+    "ld": 0.247,
+    "kAB": 0.23,
+    "pHitAB": 0.305,
+    "expAB": 3.69
+   }
+  },
+  {
+   "id": 670764,
+   "name": "Taylor Walls",
+   "team": "TB",
+   "opp": "CWS",
+   "sp": "Jordan Hicks",
+   "slot": 9,
+   "park": "TB",
+   "pHR": 0.0197,
+   "pHit": 0.5783,
+   "pHRraw": 0.0197,
+   "pHitRaw": 0.5783,
+   "hr_detail": {
+    "hrBBE": 0.011,
+    "barrel": 0.039,
+    "pullAir": 0.126,
+    "hard": 0.264,
+    "mPit": 0.7,
+    "parkPF": 93,
+    "pHRperPA": 0.0056
+   },
+   "hit_detail": {
+    "xbaCon": 0.291,
+    "ld": 0.221,
+    "kAB": 0.269,
+    "pHitAB": 0.253,
+    "expAB": 3.47
+   }
+  },
+  {
+   "id": 802415,
+   "name": "Chandler Simpson",
+   "team": "TB",
+   "opp": "CWS",
+   "sp": "Jordan Hicks",
+   "slot": 2,
+   "park": "TB",
+   "pHR": 0.0104,
+   "pHit": 0.7321,
+   "pHRraw": 0.0104,
+   "pHitRaw": 0.7321,
+   "hr_detail": {
+    "hrBBE": 0.0067,
+    "barrel": 0.012,
+    "pullAir": 0.038,
+    "hard": 0.177,
+    "mPit": 0.7,
+    "parkPF": 93,
+    "pHRperPA": 0.0023
+   },
+   "hit_detail": {
+    "xbaCon": 0.294,
+    "ld": 0.222,
+    "kAB": 0.181,
+    "pHitAB": 0.287,
+    "expAB": 4.21
    }
   }
  ]
