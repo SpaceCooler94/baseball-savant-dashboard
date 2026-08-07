@@ -89,7 +89,8 @@ def batter_form(df):
     has = {c: _col(bbe, c) for c in
            ["game_date", "events", "bb_type", "launch_speed", "launch_angle",
             "launch_speed_angle", "estimated_ba_using_speedangle",
-            "estimated_slg_using_speedangle", "hit_distance_sc"]}
+            "estimated_slg_using_speedangle", "hit_distance_sc",
+            "hc_x", "hc_y", "stand"]}
     out = {}
     for pid, g in bbe.groupby("batter"):
         # last 10 distinct games for THIS batter
@@ -120,6 +121,7 @@ def batter_form(df):
             if has["hit_distance_sc"]:
                 cond = cond | (not_hr & (g[has["hit_distance_sc"]] >= 385))
             near = int(cond.sum())
+        pull_pct = _pull_pct(g, has)
         x_iso = None
         if has["estimated_ba_using_speedangle"] and has["estimated_slg_using_speedangle"]:
             xba = g[has["estimated_ba_using_speedangle"]].mean()
@@ -137,11 +139,38 @@ def batter_form(df):
             "ldPct": round(ld / n * 100, 1),
             "gbPct": round(gb / n * 100, 1),
             "airPct": round((fb + ld) / n * 100, 1),
+            "pullPct": pull_pct,
             "xIso": x_iso,
         }
         form["profile"] = classify_profile(form)
         out[int(pid)] = form
     return out
+
+
+# Pull% via spray angle from hc_x/hc_y -- these are raw per-pitch Statcast
+# coordinates (not a leaderboard aggregate), so they're already present in the
+# bulk pull this module does; no extra network call. The hc_x/hc_y -> degrees
+# formula below is the standard community reverse-engineering of Savant's
+# coordinate system (MLB has never published it officially) and is what public
+# tools like baseballr's calculate_spray_angle use. Left of center (negative
+# angle) is pull for a RHB, right of center (positive) is pull for a LHB.
+# REFERENCE metric: not fed into log5, same as everything else in this module.
+_HOME_X, _HOME_Y = 125.42, 198.27
+_PULL_DEG = 15.0   # +/- this band around center counts as "straightaway"
+
+def _pull_pct(g, has):
+    if not (has["hc_x"] and has["hc_y"] and has["stand"]):
+        return None
+    x, y, side = g[has["hc_x"]], g[has["hc_y"]], g[has["stand"]].astype(str)
+    dy = (_HOME_Y - y)
+    valid = dy > 1  # guard against div-by-zero / bunts-at-the-plate artifacts
+    if valid.sum() < 5:
+        return None
+    import math as _m
+    angle = ((x[valid] - _HOME_X) / dy[valid]).apply(lambda v: _m.atan(v) * 180 / _m.pi * 0.75)
+    stand = side[valid]
+    pulled = ((stand == "R") & (angle < -_PULL_DEG)) | ((stand == "L") & (angle > _PULL_DEG))
+    return round(float(pulled.sum()) / len(angle) * 100, 1)
 
 
 def classify_profile(f):
