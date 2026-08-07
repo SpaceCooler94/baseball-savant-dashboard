@@ -722,10 +722,13 @@ def compute_angles(row, opp):
                 cpitch["pitch"], (opp.get("recentStarts") or RF.RECENT_STARTS), ", ".join(bits) or "recent"),
                 "green")
     zg = row.get("zoneGrade")
+    n_strong = len(row.get("zoneStrong") or []) or 1
     if zg == "elite":
-        add("zone_elite", "Zone matchup %d/9 -- elite overlap" % row.get("zoneScore", 0), "green")
+        add("zone_elite", "Elite zone overlap -- SP lives in %d of his %d damage zones"
+            % (row.get("zoneScore", 0), n_strong), "green")
     elif zg == "good":
-        add("zone_good", "Zone matchup %d/9 -- good overlap" % row.get("zoneScore", 0), "green")
+        add("zone_good", "Good zone overlap -- SP lives in %d of his %d damage zones"
+            % (row.get("zoneScore", 0), n_strong), "green")
     rfit, sfit = row.get("recentFitBA"), row.get("pitchFitBA")
     if rfit is not None and sfit is not None and rfit - sfit >= 0.050:
         add("recent_fit_gap", "Fit improves vs recent mix (.%03d vs .%03d)" % (
@@ -803,7 +806,11 @@ def project_side(hitters, opp_pitcher, ctx, league, calibration, extras=None):
                 "barrelPct": sm.get("barrelPct"),
                 "hardHitPct": sm.get("hardHitPct"),
                 "avgEV": sm.get("avgEV"),
-                "pullPct": sm.get("pullPct"),
+                # Was always None: fetch_savant_metrics() never set this key,
+                # so every board shipped a dead field. Real pull% now comes from
+                # recent_form's spray-angle computation (see recent_form.py) --
+                # an L10 window, same recency basis as the rest of that module.
+                "pullPct": (rf.get("pullPct") if rf else None),
                 "fbPct": sm.get("fbPct"),
                 "xBA": sm.get("xBA"),
                 "xSLG": sm.get("xSLG"),
