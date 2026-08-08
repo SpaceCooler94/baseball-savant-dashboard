@@ -909,6 +909,12 @@ def fetch_recent_layer():
             except Exception as e:
                 warn(f"{label} failed ({type(e).__name__}: {e}) -- other recent-form parts unaffected")
                 continue
+            # An empty result is NOT a success. lineup_slots() returned {} on
+            # live data for a full day without raising, so no warning fired and
+            # every row silently fell back to 3.9 PA while the board looked
+            # healthy. Empty now warns as loudly as a crash.
+            if not result:
+                warn(f"{label} returned no data (no exception) -- check its input assumptions")
             if sink == "batters":
                 rf_batters = result
             elif sink == "pitchers":
