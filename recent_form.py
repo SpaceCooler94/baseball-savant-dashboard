@@ -66,6 +66,21 @@ def _col(df, name):
 
 
 def _f(v):
+    """NA-safe float coercion.
+
+    The old body was `f = float(v); return f if f == f else None`, which broke
+    on 2026-08-08: modern pybaseball hands back pandas NULLABLE dtypes, where a
+    column that is entirely null has a mean of pd.NA. float(pd.NA) raises
+    TypeError -- caught here -- but the same self-comparison idiom used inline
+    elsewhere raised "boolean value of NA is ambiguous" and killed the whole
+    recent-form pull, taking L10 profiles, pitch mix, pull%, AND lineup slots
+    with it. Never test NA-ness with `x == x`; always use pd.isna()."""
+    try:
+        import pandas as _pd
+        if v is None or _pd.isna(v):
+            return None
+    except (TypeError, ValueError):
+        pass
     try:
         f = float(v)
         return f if f == f else None
@@ -83,7 +98,7 @@ def batter_form(df):
     need = ["batter", "game_pk", "type"]
     if any(_col(df, c) is None for c in need):
         return {}
-    bbe = df[df["type"] == "X"].copy()   # 'X' = ball put in play
+    bbe = df[(df["type"].astype(str) == "X")].copy()   # 'X' = ball put in play
     if bbe.empty:
         return {}
     has = {c: _col(bbe, c) for c in
@@ -124,10 +139,13 @@ def batter_form(df):
         pull_pct = _pull_pct(g, has)
         x_iso = None
         if has["estimated_ba_using_speedangle"] and has["estimated_slg_using_speedangle"]:
-            xba = g[has["estimated_ba_using_speedangle"]].mean()
-            xslg = g[has["estimated_slg_using_speedangle"]].mean()
-            if xba == xba and xslg == xslg:
-                x_iso = round(float(xslg - xba), 3)
+            # _f() rather than `== itself`: these means are pd.NA when the
+            # column is all-null under nullable dtypes, and pd.NA in a boolean
+            # context raises.
+            xba = _f(g[has["estimated_ba_using_speedangle"]].mean())
+            xslg = _f(g[has["estimated_slg_using_speedangle"]].mean())
+            if xba is not None and xslg is not None:
+                x_iso = round(xslg - xba, 3)
         form = {
             "bbe": n,
             "games": len(last_games),
@@ -161,15 +179,23 @@ _PULL_DEG = 15.0   # +/- this band around center counts as "straightaway"
 def _pull_pct(g, has):
     if not (has["hc_x"] and has["hc_y"] and has["stand"]):
         return None
-    x, y, side = g[has["hc_x"]], g[has["hc_y"]], g[has["stand"]].astype(str)
+    import pandas as _pd
+    # to_numeric + astype(float) collapses nullable dtypes to plain NaN, so the
+    # comparisons below can never produce an NA-bearing mask (which is not a
+    # valid indexer and raises the same ambiguous-NA TypeError).
+    x = _pd.to_numeric(g[has["hc_x"]], errors="coerce").astype(float)
+    y = _pd.to_numeric(g[has["hc_y"]], errors="coerce").astype(float)
+    side = g[has["stand"]].astype(str)
     dy = (_HOME_Y - y)
-    valid = dy > 1  # guard against div-by-zero / bunts-at-the-plate artifacts
-    if valid.sum() < 5:
+    valid = (dy > 1) & x.notna() & y.notna()
+    valid = valid.fillna(False)
+    if int(valid.sum()) < 5:
         return None
     import math as _m
     angle = ((x[valid] - _HOME_X) / dy[valid]).apply(lambda v: _m.atan(v) * 180 / _m.pi * 0.75)
     stand = side[valid]
     pulled = ((stand == "R") & (angle < -_PULL_DEG)) | ((stand == "L") & (angle > _PULL_DEG))
+    pulled = pulled.fillna(False)
     return round(float(pulled.sum()) / len(angle) * 100, 1)
 
 
@@ -219,7 +245,9 @@ def lineup_slots(df):
     if any(_col(df, c) is None for c in need):
         return {}
     has_date = _col(df, "game_date")
-    first = df[df["inning"] == 1]
+    import pandas as _pd
+    inning = _pd.to_numeric(df["inning"], errors="coerce")
+    first = df[(inning == 1).fillna(False)]
     if first.empty:
         return {}
 
@@ -317,9 +345,9 @@ def pitcher_recent(df):
             if has_xslg and has_type:
                 bip = pg[pg[has_type] == "X"]
                 if len(bip) >= 5:
-                    xs = bip[has_xslg].mean()
-                    if xs == xs:
-                        entry["xSlg"] = round(float(xs), 3)
+                    xs = _f(bip[has_xslg].mean())
+                    if xs is not None:
+                        entry["xSlg"] = round(xs, 3)
             mix.append(entry)
         mix.sort(key=lambda m: m["usage"], reverse=True)
         out[int(pid)] = {"starts": len(recent_games), "pitches": total,
