@@ -1,0 +1,72 @@
+# .github/workflows/lineup_refresh.yml
+#
+# Upgrades today's board from PROJECTED to CONFIRMED lineups as cards get
+# posted. Runs three times because one pull cannot cover the slate:
+#
+#   11:00am ET -> day games                     ~15% of the slate
+#    4:30pm ET -> + late afternoon, east night   ~70%  (4:00pm reaches only 35%
+#                 -- prime-time east cards land around 4:20, so the extra 30
+#                 minutes is worth more than it looks)
+#    7:30pm ET -> + central and west             100%
+#
+# Each run patches whatever is confirmed at that moment and leaves the rest
+# projected, so extra runs are always safe and never destructive. The script
+# also refuses to touch a board whose builtAt isn't today.
+#
+# CRON IS UTC AND DOES NOT FOLLOW DST. The times below are set for Eastern
+# DAYLIGHT time (UTC-4), which covers the entire MLB regular season. If you're
+# ever running this in November, shift each by +1 hour.
+#   11:00 ET = 15:00 UTC | 16:30 ET = 20:30 UTC | 19:30 ET = 23:30 UTC
+# refresh_lineups.py pins its own date logic to America/New_York regardless,
+# so a drifting trigger only affects freshness, never correctness.
+
+name: lineup-refresh
+
+on:
+  schedule:
+    - cron: "0 15 * * *"     # 11:00am ET -- day games
+    - cron: "30 20 * * *"    # 4:30pm ET  -- east night games
+    - cron: "30 23 * * *"    # 7:30pm ET  -- central + west
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: daily-board          # serialize with the build so pushes can't collide
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # Deliberately lean: this job needs one HTTP call and the model module.
+      # No pybaseball, no pandas -- it recomputes from rawPerPA already on the
+      # board rather than refetching anything.
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install "requests>=2.31,<3"
+
+      - name: Patch confirmed lineups
+        run: python refresh_lineups.py
+
+      - name: Commit board
+        run: |
+          git config user.name "board-bot"
+          git config user.email "board-bot@users.noreply.github.com"
+          git add daily_board.json
+          if git diff --cached --quiet; then
+            echo "No lineup changes to commit"
+          else
+            git commit -m "lineups $(TZ=America/New_York date +'%F %H:%M') [skip ci]"
+            git pull --rebase origin main
+            git push
+          fi
