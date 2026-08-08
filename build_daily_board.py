@@ -666,6 +666,21 @@ def pitch_fit(vs_pitch, pitch_mix):
     return round(weighted / covered, 3), round(covered, 1)
 
 
+def pctl_in(sorted_vals, v):
+    """Fraction of the slate at or below v. None when there's nothing to
+    compare against -- an absolute HR/9 with no slate context is not a signal."""
+    if v is None or not sorted_vals:
+        return None
+    lo, hi = 0, len(sorted_vals)
+    while lo < hi:
+        mid = (lo + hi) // 2
+        if sorted_vals[mid] < v:
+            lo = mid + 1
+        else:
+            hi = mid
+    return round(lo / len(sorted_vals), 3)
+
+
 def compute_angles(row, opp):
     """Deterministic betting-angle flags, each with a STABLE key -- settle.py
     stamps keys onto ledger rows so every angle's residual lift is measurable
@@ -721,6 +736,16 @@ def compute_angles(row, opp):
             add("pitch_crushed", "%s getting crushed L%d (%s)" % (
                 cpitch["pitch"], (opp.get("recentStarts") or RF.RECENT_STARTS), ", ".join(bits) or "recent"),
                 "green")
+    # Opposing SP's HR/9 relative to tonight's arms. Top quartile = "vulnerable."
+    # Stable key -> lands in the ledger -> measurable later.
+    q = row.get("oppHr9Pctl")
+    if q is not None and opp and opp.get("hrPer9") is not None:
+        if q >= 0.75:
+            add("sp_hr9_vuln", "HR-vulnerable arm: %.2f HR/9, top %d%% of slate"
+                % (opp["hrPer9"], round((1 - q) * 100)), "green")
+        elif q <= 0.25:
+            add("sp_hr9_stingy", "Stingy arm: %.2f HR/9, bottom %d%% of slate"
+                % (opp["hrPer9"], round(q * 100)), "orange")
     zg = row.get("zoneGrade")
     n_strong = len(row.get("zoneStrong") or []) or 1
     if zg == "elite":
@@ -822,6 +847,8 @@ def project_side(hitters, opp_pitcher, ctx, league, calibration, extras=None):
                 "vsPitch": sm.get("vsPitch"),
             },
         }
+        row["oppHr9"] = (opp_pitcher or {}).get("hrPer9")
+        row["oppHr9Pctl"] = pctl_in(ex.get("slateHr9") or [], row["oppHr9"])
         row["angles"] = compute_angles(row, opp_pitcher)
         out.append(row)
     return out
@@ -905,6 +932,30 @@ def build_board():
     league = M.league_rates(pool)
     calibration = load_calibration()
     games = get_schedule()
+
+    # --- slate HR/9 pool -------------------------------------------------
+    # "Vulnerable to the homer" only means something RELATIVE to the arms
+    # actually pitching tonight: 1.4 HR/9 is a soft matchup on a slate of aces
+    # and a hard one on a slate of swingmen. Collect every probable's HR/9
+    # first, then grade each row against that distribution -- same
+    # self-calibrating logic the client uses for probabilities.
+    # UNPROVEN: this is reference + a ledger-stamped angle only. It does NOT
+    # touch log5. A one-day retrospective (2026-08-07) found HRs came off
+    # above-median HR/9 arms 52% of the time vs 50% at chance, and off
+    # top-quartile arms 22% vs 25% expected -- i.e. no visible edge in 28
+    # events, which is far too few to conclude anything either way. The angle
+    # key exists so calibrate/settle can answer this properly in a few weeks.
+    slate_hr9 = []
+    for g in games:
+        for side in ("home", "away"):
+            prob = (g.get("teams", {}).get(side, {}) or {}).get("probablePitcher")
+            if prob and prob.get("id"):
+                rec = get_pitcher_rates(prob["id"])
+                v = nv((rec or {}).get("hrPer9"))
+                if v is not None:
+                    slate_hr9.append(v)
+    slate_hr9.sort()
+    extras["slateHr9"] = slate_hr9
 
     by_team = {}
     for h in pool:
