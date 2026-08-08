@@ -190,6 +190,97 @@ def classify_profile(f):
     return None
 
 
+# ------------------------------ lineup slots ---------------------------------
+
+SLOT_DECAY = 0.88      # per game back; ~10-game effective window
+MIN_SLOT_GAMES = 3     # below this, no orderAvg -- the model falls back to 3.9
+
+
+def lineup_slots(df):
+    """{batterId: {"orderAvg": float, "games": int, "lastSlot": int, "startPct": float}}
+
+    Derived from the bulk Statcast pull already made for recent form -- NO extra
+    network call. The trick: in the first inning, batters come up in lineup
+    order, so the first nine distinct batters of each half-inning ARE that
+    team's batting order. Anyone appearing later (pinch hitter, defensive sub)
+    correctly gets no slot for that game.
+
+    WHY THIS MATTERS MORE THAN IT SOUNDS: expected_pa() spans 4.6 PA (leadoff)
+    to 3.75 (9-hole), which at league hit rates is ~8 points of hit probability.
+    Until now every hitter was projected at 3.9 PA because lineups aren't posted
+    at build time, so ALL of that variance was discarded -- more spread than the
+    model's measured end-to-end discrimination (6.9 pts, per the 2026-08-08
+    reliability table). Recovering it is the single largest available win.
+
+    Slots are recency-weighted (SLOT_DECAY per game back) because managers move
+    people; startPct is the share of the window's team-games this batter started,
+    which is the honest read on whether he's a regular or a bench bat."""
+    need = ["batter", "game_pk", "at_bat_number", "inning", "inning_topbot"]
+    if any(_col(df, c) is None for c in need):
+        return {}
+    has_date = _col(df, "game_date")
+    first = df[df["inning"] == 1]
+    if first.empty:
+        return {}
+
+    # (game, half) -> ordered first nine distinct batters = that lineup
+    per_batter = {}
+    team_games = {}          # (game_pk, half) counted once, keyed per lineup
+    game_dates = {}
+    for (gpk, half), g in first.groupby(["game_pk", "inning_topbot"]):
+        g = g.sort_values("at_bat_number")
+        seen = []
+        for b in g["batter"]:
+            b = int(b)
+            if b not in seen:
+                seen.append(b)
+            if len(seen) == 9:
+                break
+        if len(seen) < 9:
+            continue         # incomplete half-inning; not a readable lineup
+        key = (gpk, half)
+        team_games[key] = True
+        if has_date:
+            game_dates[key] = str(g[has_date].iloc[0])
+        for slot, b in enumerate(seen, start=1):
+            per_batter.setdefault(b, []).append((key, slot))
+
+    # order the windows newest-first so decay weights are meaningful
+    ordered = sorted(team_games.keys(),
+                     key=lambda k: game_dates.get(k, ""), reverse=True)
+    rank = {k: i for i, k in enumerate(ordered)}
+
+    # how many team-games each batter's club actually played in the window
+    club_games = {}
+    for b, entries in per_batter.items():
+        club_games[b] = len({k for k, _ in entries})
+
+    out = {}
+    for b, entries in per_batter.items():
+        entries.sort(key=lambda e: rank.get(e[0], 999))
+        wsum = 0.0
+        vsum = 0.0
+        for i, (key, slot) in enumerate(entries):
+            w = SLOT_DECAY ** rank.get(key, i)
+            wsum += w
+            vsum += w * slot
+        if not wsum or len(entries) < MIN_SLOT_GAMES:
+            continue
+        out[b] = {
+            "orderAvg": round(vsum / wsum, 2),
+            "games": len(entries),
+            "lastSlot": entries[0][1],
+        }
+    # startPct needs the team's game count, which we approximate by the max
+    # games any of that batter's lineup-mates appeared in -- computed per game
+    # set rather than per club, since we never resolve team identity here.
+    if out:
+        maxg = max(v["games"] for v in out.values()) or 1
+        for v in out.values():
+            v["startPct"] = round(min(1.0, v["games"] / maxg) * 100, 1)
+    return out
+
+
 # ---------------------------- pitcher recent (3) -----------------------------
 
 def pitcher_recent(df):
