@@ -94,7 +94,7 @@ USER_AGENT = "mlb-daily-board/1.0 (personal analytics pipeline)"
 
 MIN_PA = 25                 # pool floor, matches the model's MIN_PA
 SPLIT_SIT_CODES = "vl,vr"
-BOARD_SCHEMA_VERSION = 5.5   # 5.5: recent-form/profiles/mix-drift/zone layer (reference only; modelVersion unchanged)
+BOARD_SCHEMA_VERSION = 5.6   # 5.6: projected lineup slots -> per-row expectedPA   # 5.5: recent-form/profiles/mix-drift/zone layer (reference only; modelVersion unchanged)
 LEAGUE_K_PER_BF_PCT = 22.0   # rough league K%/BF baseline for angle thresholds
 
 # Publish gates: don't overwrite a good served board with a hollow one.
@@ -152,6 +152,8 @@ HEALTH = {
     "savantBatterArsenalOk": False,
     "savantPitcherArsenalOk": False,
     "recentFormOk": False,
+    "lineupSlotsOk": False,
+    "lineupSlotCount": 0,
     "zoneCacheOk": False,
     "zoneCacheAsOf": None,
     "warnings": [],
@@ -811,6 +813,9 @@ def project_side(hitters, opp_pitcher, ctx, league, calibration, extras=None):
             "hrInputs": hr["inputs"],
             "expectedPA": hit["expectedPA"], "batOrderAvg": h.get("orderAvg"),
             "lineupUnconfirmed": True,
+            "slotSource": ("projected" if h.get("_slot") else "default"),
+            "slotLast": (h.get("_slot") or {}).get("lastSlot"),
+            "slotGames": (h.get("_slot") or {}).get("games"),
             "pitchFitBA": fit_ba,
             "pitchFitCoverage": fit_cov,
             "coreFitBA": core_fit_ba,
@@ -880,12 +885,15 @@ def fetch_recent_layer():
     loaded from disk (updated by zone_engine.py in the workflow). All
     best-effort: a failure here degrades to a board without the recent-form
     layer, never a failed build."""
-    rf_batters, rf_pitchers, rf_df = {}, {}, None
+    rf_batters, rf_pitchers, rf_df, rf_slots = {}, {}, None, {}
     try:
         rf_df = RF.fetch_statcast()
         rf_batters = RF.batter_form(rf_df)
         rf_pitchers = RF.pitcher_recent(rf_df)
+        rf_slots = RF.lineup_slots(rf_df)
         HEALTH["recentFormOk"] = bool(rf_batters)
+        HEALTH["lineupSlotsOk"] = bool(rf_slots)
+        HEALTH["lineupSlotCount"] = len(rf_slots)
     except Exception as e:
         warn(f"recent-form statcast pull failed ({type(e).__name__}: {e})")
     zone_cache = None
@@ -898,7 +906,7 @@ def fetch_recent_layer():
             warn("zones_cache.json missing -- run zone_engine.py (see --backfill)")
     except Exception as e:
         warn(f"zone cache load failed ({type(e).__name__})")
-    return rf_batters, rf_pitchers, rf_df, zone_cache
+    return rf_batters, rf_pitchers, rf_df, zone_cache, rf_slots
 
 
 def enrich_probable(pd_dict, pid, rf_pitchers, rf_df):
@@ -925,10 +933,22 @@ def build_board():
     pool = build_batter_pool()
     savant = fetch_savant_metrics()
     pitch_mix = fetch_pitcher_pitch_mix()
-    rf_batters, rf_pitchers, rf_df, zone_cache = fetch_recent_layer()
+    rf_batters, rf_pitchers, rf_df, zone_cache, rf_slots = fetch_recent_layer()
     extras = {"rfBatters": rf_batters, "zoneCache": zone_cache}
     for h in pool:
         h["_savant"] = savant.get(_norm_name(h.get("name")), {})
+        # PROJECTED lineup slot, from the batter's own recent starts. Until now
+        # orderAvg was always None, so expected_pa() returned the whole-lineup
+        # 3.9 for every hitter and the model discarded the PA-volume difference
+        # between a leadoff man (4.6) and a 9-hole bat (3.75) -- about 8 points
+        # of hit probability, larger than the model's entire measured spread.
+        # This is a PROJECTION, not a confirmed lineup: it says where he has
+        # been hitting, not where he hits tonight. Rows carry lineupUnconfirmed
+        # so the client keeps saying so.
+        sl = rf_slots.get(h["id"])
+        if sl:
+            h["orderAvg"] = sl["orderAvg"]
+            h["_slot"] = sl
     league = M.league_rates(pool)
     calibration = load_calibration()
     games = get_schedule()
