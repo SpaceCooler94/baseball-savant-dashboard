@@ -1,22 +1,81 @@
 {
  "modelVersion": "log5-v5.4",
- "fitDate": "2026-08-07",
+ "fitDate": "2026-08-08",
  "reports": {
   "hit": {
-   "n": 4462,
-   "valLogLossRaw": 0.65867,
-   "valLogLossCal": 0.65829,
-   "trainScale": 0.4576,
-   "trainOffset": 0.2273,
-   "verdict": "identity: improvement 0.00038 < 0.00050"
+   "n": 4708,
+   "valLogLossRaw": 0.66639,
+   "valLogLossCal": 0.66409,
+   "trainScale": 0.4863,
+   "trainOffset": 0.224,
+   "verdict": "published"
   },
   "hr": {
-   "n": 4462,
-   "valLogLossRaw": 0.36325,
-   "valLogLossCal": 0.364,
-   "trainScale": 1.0618,
-   "trainOffset": 0.0206,
-   "verdict": "identity: improvement -0.00074 < 0.00050"
+   "n": 4708,
+   "valLogLossRaw": 0.3696,
+   "valLogLossCal": 0.37085,
+   "trainScale": 1.0801,
+   "trainOffset": 0.0714,
+   "verdict": "identity: improvement -0.00125 < 0.00050"
   }
- }
+ },
+ "hit": {
+  "scale": 0.4951,
+  "offset": 0.2105,
+  "n": 4708,
+  "valLogLossRaw": 0.66639,
+  "valLogLossCal": 0.66409
+ },
+ "reliabilityHit": [
+  {
+   "n": 470,
+   "meanPredicted": 0.5502,
+   "observedRate": 0.583
+  },
+  {
+   "n": 471,
+   "meanPredicted": 0.5879,
+   "observedRate": 0.5817
+  },
+  {
+   "n": 471,
+   "meanPredicted": 0.6068,
+   "observedRate": 0.6136
+  },
+  {
+   "n": 471,
+   "meanPredicted": 0.622,
+   "observedRate": 0.6093
+  },
+  {
+   "n": 471,
+   "meanPredicted": 0.6348,
+   "observedRate": 0.6136
+  },
+  {
+   "n": 470,
+   "meanPredicted": 0.6472,
+   "observedRate": 0.6191
+  },
+  {
+   "n": 471,
+   "meanPredicted": 0.6599,
+   "observedRate": 0.6624
+  },
+  {
+   "n": 471,
+   "meanPredicted": 0.6738,
+   "observedRate": 0.6412
+  },
+  {
+   "n": 471,
+   "meanPredicted": 0.6905,
+   "observedRate": 0.6412
+  },
+  {
+   "n": 471,
+   "meanPredicted": 0.725,
+   "observedRate": 0.6518
+  }
+ ]
 }
