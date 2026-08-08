@@ -241,15 +241,21 @@ def lineup_slots(df):
     Slots are recency-weighted (SLOT_DECAY per game back) because managers move
     people; startPct is the share of the window's team-games this batter started,
     which is the honest read on whether he's a regular or a bench bat."""
-    need = ["batter", "game_pk", "at_bat_number", "inning", "inning_topbot"]
+    need = ["batter", "game_pk", "at_bat_number", "inning_topbot"]
     if any(_col(df, c) is None for c in need):
         return {}
     has_date = _col(df, "game_date")
-    import pandas as _pd
-    inning = _pd.to_numeric(df["inning"], errors="coerce")
-    first = df[(inning == 1).fillna(False)]
-    if first.empty:
-        return {}
+    # READ THE WHOLE GAME, NOT JUST THE FIRST INNING.
+    # v1 filtered to inning 1 and required exactly nine distinct batters there,
+    # which is almost never true -- a half-inning ends after three outs, so a
+    # team usually sends 3-5 batters up in the first. Only an unusually big
+    # first inning qualified, so lineup_slots() returned {} on live data and
+    # every row silently fell back to 3.9 PA. (The unit test passed because the
+    # fixture put nine batters in inning 1 -- a fixture that matched the bug.)
+    # Ordering the full game by at_bat_number and taking the first nine distinct
+    # batters gives the same answer far more robustly: those nine ARE the
+    # lineup, since the order has to turn over before anyone repeats.
+    first = df
 
     # (game, half) -> ordered first nine distinct batters = that lineup
     per_batter = {}
@@ -265,7 +271,7 @@ def lineup_slots(df):
             if len(seen) == 9:
                 break
         if len(seen) < 9:
-            continue         # incomplete half-inning; not a readable lineup
+            continue         # game never turned the order over; not readable
         key = (gpk, half)
         team_games[key] = True
         if has_date:
