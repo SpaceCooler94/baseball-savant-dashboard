@@ -886,16 +886,38 @@ def fetch_recent_layer():
     best-effort: a failure here degrades to a board without the recent-form
     layer, never a failed build."""
     rf_batters, rf_pitchers, rf_df, rf_slots = {}, {}, None, {}
+    # ISOLATED FAILURE DOMAINS. These four derivations share one Statcast pull
+    # but are otherwise independent, and wrapping them in a single try meant one
+    # bad column killed all of them. That happened on 2026-08-08: a pandas
+    # nullable-NA TypeError inside batter_form took out pitch mix, pull%, AND
+    # lineup slots, so 271 of 368 rows silently fell back to a league-average
+    # 3.9 PA -- the exact variance the lineup work exists to recover. Each step
+    # now fails alone and says which one failed.
     try:
         rf_df = RF.fetch_statcast()
-        rf_batters = RF.batter_form(rf_df)
-        rf_pitchers = RF.pitcher_recent(rf_df)
-        rf_slots = RF.lineup_slots(rf_df)
+    except Exception as e:
+        warn(f"statcast pull failed ({type(e).__name__}: {e}) -- recent-form layer skipped")
+        rf_df = None
+    if rf_df is not None:
+        for label, fn, sink in (
+            ("batter form", RF.batter_form, "batters"),
+            ("pitcher recent", RF.pitcher_recent, "pitchers"),
+            ("lineup slots", RF.lineup_slots, "slots"),
+        ):
+            try:
+                result = fn(rf_df)
+            except Exception as e:
+                warn(f"{label} failed ({type(e).__name__}: {e}) -- other recent-form parts unaffected")
+                continue
+            if sink == "batters":
+                rf_batters = result
+            elif sink == "pitchers":
+                rf_pitchers = result
+            else:
+                rf_slots = result
         HEALTH["recentFormOk"] = bool(rf_batters)
         HEALTH["lineupSlotsOk"] = bool(rf_slots)
         HEALTH["lineupSlotCount"] = len(rf_slots)
-    except Exception as e:
-        warn(f"recent-form statcast pull failed ({type(e).__name__}: {e})")
     zone_cache = None
     try:
         zone_cache = Z.load_cache()
