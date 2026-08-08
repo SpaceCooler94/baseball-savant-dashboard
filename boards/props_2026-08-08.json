@@ -340,6 +340,122 @@
    }
   },
   {
+   "id": 678545,
+   "name": "Osleivis Basabe",
+   "team": "SF",
+   "opp": "DET",
+   "sp": "Jackson Jobe",
+   "slot": 5,
+   "park": "SF",
+   "pHR": 0.1308,
+   "pHit": 0.7703,
+   "pHRraw": 0.1308,
+   "pHitRaw": 0.7703,
+   "hr_detail": {
+    "hrBBE": 0.0706,
+    "barrel": 0.107,
+    "pullAir": 0.114,
+    "hard": 0.412,
+    "mPit": 1.0,
+    "parkPF": 82,
+    "pHRperPA": 0.0352
+   },
+   "hit_detail": {
+    "xbaCon": 0.326,
+    "ld": 0.216,
+    "kAB": 0.21,
+    "pHitAB": 0.314,
+    "expAB": 3.87
+   }
+  },
+  {
+   "id": 646240,
+   "name": "Rafael Devers",
+   "team": "SF",
+   "opp": "DET",
+   "sp": "Jackson Jobe",
+   "slot": 4,
+   "park": "SF",
+   "pHR": 0.1301,
+   "pHit": 0.7619,
+   "pHRraw": 0.1301,
+   "pHitRaw": 0.7619,
+   "hr_detail": {
+    "hrBBE": 0.0716,
+    "barrel": 0.106,
+    "pullAir": 0.11,
+    "hard": 0.494,
+    "mPit": 1.0,
+    "parkPF": 82,
+    "pHRperPA": 0.0335
+   },
+   "hit_detail": {
+    "xbaCon": 0.324,
+    "ld": 0.205,
+    "kAB": 0.213,
+    "pHitAB": 0.307,
+    "expAB": 3.86
+   }
+  },
+  {
+   "id": 805811,
+   "name": "Bryce Eldridge",
+   "team": "SF",
+   "opp": "DET",
+   "sp": "Jackson Jobe",
+   "slot": 1,
+   "park": "SF",
+   "pHR": 0.1255,
+   "pHit": 0.757,
+   "pHRraw": 0.1255,
+   "pHitRaw": 0.757,
+   "hr_detail": {
+    "hrBBE": 0.0574,
+    "barrel": 0.108,
+    "pullAir": 0.089,
+    "hard": 0.495,
+    "mPit": 1.0,
+    "parkPF": 82,
+    "pHRperPA": 0.0269
+   },
+   "hit_detail": {
+    "xbaCon": 0.328,
+    "ld": 0.223,
+    "kAB": 0.252,
+    "pHitAB": 0.3,
+    "expAB": 4.14
+   }
+  },
+  {
+   "id": 642715,
+   "name": "Willy Adames",
+   "team": "SF",
+   "opp": "DET",
+   "sp": "Jackson Jobe",
+   "slot": 3,
+   "park": "SF",
+   "pHR": 0.1234,
+   "pHit": 0.717,
+   "pHRraw": 0.1234,
+   "pHitRaw": 0.717,
+   "hr_detail": {
+    "hrBBE": 0.0605,
+    "barrel": 0.086,
+    "pullAir": 0.17,
+    "hard": 0.388,
+    "mPit": 1.0,
+    "parkPF": 82,
+    "pHRperPA": 0.031
+   },
+   "hit_detail": {
+    "xbaCon": 0.308,
+    "ld": 0.196,
+    "kAB": 0.248,
+    "pHitAB": 0.276,
+    "expAB": 4.0
+   }
+  },
+  {
    "id": 663330,
    "name": "Jahmai Jones",
    "team": "BOS",
@@ -920,6 +1036,35 @@
    }
   },
   {
+   "id": 678760,
+   "name": "Eddys Leonard",
+   "team": "SF",
+   "opp": "DET",
+   "sp": "Jackson Jobe",
+   "slot": 7,
+   "park": "SF",
+   "pHR": 0.083,
+   "pHit": 0.7715,
+   "pHRraw": 0.083,
+   "pHitRaw": 0.7715,
+   "hr_detail": {
+    "hrBBE": 0.0424,
+    "barrel": 0.089,
+    "pullAir": 0.113,
+    "hard": 0.381,
+    "mPit": 1.0,
+    "parkPF": 82,
+    "pHRperPA": 0.0232
+   },
+   "hit_detail": {
+    "xbaCon": 0.318,
+    "ld": 0.252,
+    "kAB": 0.22,
+    "pHitAB": 0.314,
+    "expAB": 3.66
+   }
+  },
+  {
    "id": 641680,
    "name": "Jonah Heim",
    "team": "ATH",
@@ -1294,6 +1439,122 @@
     "kAB": 0.194,
     "pHitAB": 0.334,
     "expAB": 3.88
+   }
+  },
+  {
+   "id": 683766,
+   "name": "Christian Koss",
+   "team": "SF",
+   "opp": "DET",
+   "sp": "Jackson Jobe",
+   "slot": 9,
+   "park": "SF",
+   "pHR": 0.0596,
+   "pHit": 0.7416,
+   "pHRraw": 0.0596,
+   "pHitRaw": 0.7416,
+   "hr_detail": {
+    "hrBBE": 0.0274,
+    "barrel": 0.058,
+    "pullAir": 0.123,
+    "hard": 0.327,
+    "mPit": 1.0,
+    "parkPF": 82,
+    "pHRperPA": 0.0153
+   },
+   "hit_detail": {
+    "xbaCon": 0.31,
+    "ld": 0.231,
+    "kAB": 0.235,
+    "pHitAB": 0.293,
+    "expAB": 3.5
+   }
+  },
+  {
+   "id": 701852,
+   "name": "Drew Cavanaugh",
+   "team": "SF",
+   "opp": "DET",
+   "sp": "Jackson Jobe",
+   "slot": 8,
+   "park": "SF",
+   "pHR": 0.0588,
+   "pHit": 0.7588,
+   "pHRraw": 0.0588,
+   "pHitRaw": 0.7588,
+   "hr_detail": {
+    "hrBBE": 0.0272,
+    "barrel": 0.067,
+    "pullAir": 0.112,
+    "hard": 0.324,
+    "mPit": 1.0,
+    "parkPF": 82,
+    "pHRperPA": 0.0148
+   },
+   "hit_detail": {
+    "xbaCon": 0.315,
+    "ld": 0.248,
+    "kAB": 0.224,
+    "pHitAB": 0.307,
+    "expAB": 3.51
+   }
+  },
+  {
+   "id": 808982,
+   "name": "Jung Hoo Lee",
+   "team": "SF",
+   "opp": "DET",
+   "sp": "Jackson Jobe",
+   "slot": 2,
+   "park": "SF",
+   "pHR": 0.0548,
+   "pHit": 0.7932,
+   "pHRraw": 0.0548,
+   "pHitRaw": 0.7932,
+   "hr_detail": {
+    "hrBBE": 0.0254,
+    "barrel": 0.032,
+    "pullAir": 0.079,
+    "hard": 0.302,
+    "mPit": 1.0,
+    "parkPF": 82,
+    "pHRperPA": 0.012
+   },
+   "hit_detail": {
+    "xbaCon": 0.315,
+    "ld": 0.25,
+    "kAB": 0.168,
+    "pHitAB": 0.33,
+    "expAB": 4.16
+   }
+  },
+  {
+   "id": 687551,
+   "name": "Drew Gilbert",
+   "team": "SF",
+   "opp": "DET",
+   "sp": "Jackson Jobe",
+   "slot": 6,
+   "park": "SF",
+   "pHR": 0.0533,
+   "pHit": 0.801,
+   "pHRraw": 0.0533,
+   "pHitRaw": 0.801,
+   "hr_detail": {
+    "hrBBE": 0.0265,
+    "barrel": 0.038,
+    "pullAir": 0.143,
+    "hard": 0.349,
+    "mPit": 1.0,
+    "parkPF": 82,
+    "pHRperPA": 0.0138
+   },
+   "hit_detail": {
+    "xbaCon": 0.325,
+    "ld": 0.262,
+    "kAB": 0.188,
+    "pHitAB": 0.337,
+    "expAB": 3.67
    }
   },
   {
