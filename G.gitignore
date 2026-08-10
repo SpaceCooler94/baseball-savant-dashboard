@@ -1,0 +1,24 @@
+# __pycache__/ is currently COMMITTED to the repo (visible in the file tree).
+# Compiled bytecode is machine- and Python-version-specific, so it produces
+# spurious diffs on every Action run, and it is one of the "unstaged changes"
+# candidates that broke `git pull --rebase` in the lineup-refresh workflow.
+# After adding this file, untrack what's already there:
+#     git rm -r --cached __pycache__
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Atomic-write temp files. build_daily_board.py, zone_engine.py and
+# refresh_lineups.py all write via mkstemp + os.replace; if a run is killed
+# between the two, the temp file survives and would otherwise show up as an
+# untracked/dirty file in the next workflow run.
+.board_*.json
+.zones_*.json
+
+# Local env / tooling
+.venv/
+venv/
+.env
+.DS_Store
+.idea/
+.vscode/
