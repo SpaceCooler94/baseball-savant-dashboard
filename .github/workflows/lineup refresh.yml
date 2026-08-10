@@ -1,0 +1,100 @@
+# .github/workflows/lineup_refresh.yml
+#
+# Upgrades today's board from PROJECTED to CONFIRMED lineups as cards get
+# posted. Runs three times because one pull cannot cover the slate:
+#
+#   11:00am ET -> day games                     ~15% of the slate
+#    4:30pm ET -> + late afternoon, east night   ~70%  (4:00pm reaches only 35%
+#                 -- prime-time east cards land around 4:20, so the extra 30
+#                 minutes is worth more than it looks)
+#    7:30pm ET -> + central and west             100%
+#
+# Each run patches whatever is confirmed at that moment and leaves the rest
+# projected, so extra runs are always safe and never destructive. The script
+# also refuses to touch a board whose builtAt isn't today.
+#
+# CRON IS UTC AND DOES NOT FOLLOW DST. The times below are set for Eastern
+# DAYLIGHT time (UTC-4), which covers the entire MLB regular season. If you're
+# ever running this in November, shift each by +1 hour.
+#   11:00 ET = 15:00 UTC | 16:30 ET = 20:30 UTC | 19:30 ET = 23:30 UTC
+# refresh_lineups.py pins its own date logic to America/New_York regardless,
+# so a drifting trigger only affects freshness, never correctness.
+
+name: lineup-refresh
+
+on:
+  schedule:
+    - cron: "0 15 * * *"     # 11:00am ET -- day games
+    - cron: "30 20 * * *"    # 4:30pm ET  -- east night games
+    - cron: "30 23 * * *"    # 7:30pm ET  -- central + west
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: daily-board          # serialize with the build so pushes can't collide
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # Deliberately lean: this job needs one HTTP call and the model module.
+      # No pybaseball, no pandas -- it recomputes from rawPerPA already on the
+      # board rather than refetching anything.
+      - name: Install dependencies
+        # Install from requirements.txt, NOT an inline pin list. The repo pins
+        # pandas==2.2.3 (pybaseball 2.2.7 declares "pandas>=1.0.3" with no upper
+        # bound and breaks on newer majors), but this step used to install
+        # "pandas>=2,<3" inline -- so Render ran 2.2.3 while the Action floated
+        # to whatever 2.x was current. That drift is the most likely origin of
+        # the 2026-08-08 "boolean value of NA is ambiguous" failure: newer pandas
+        # returns nullable dtypes where 2.2.3 did not, and the crash took the
+        # entire recent-form layer (including lineup slots) down silently.
+        # One dependency source, one set of versions, both environments.
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Patch confirmed lineups
+        run: python refresh_lineups.py
+
+      - name: Commit board
+        run: |
+          git config user.name "board-bot"
+          git config user.email "board-bot@users.noreply.github.com"
+
+          # Diagnostic: if anything unexpected is dirty, the log should say so
+          # rather than leaving you to infer it from a rebase failure.
+          echo "--- working tree before commit ---"
+          git status --porcelain
+
+          git add daily_board.json
+          if git diff --cached --quiet; then
+            echo "No lineup changes to commit"
+          else
+            git commit -m "lineups $(TZ=America/New_York date +'%F %H:%M') [skip ci]"
+            # --autostash is the fix for "cannot pull with rebase: You have
+            # unstaged changes". We deliberately stage ONLY daily_board.json, so
+            # any other file the run touches stays unstaged and blocks a plain
+            # rebase. autostash shelves those, rebases, then restores them --
+            # which is exactly right here, since we never want to commit them.
+            git pull --rebase --autostash origin main
+            # Three workflows now push to this repo (build, lineup refresh, zone
+            # backfill). Even serialized by the concurrency group, a push can
+            # lose a race; retry once against a fresh base rather than failing
+            # the run and silently skipping a lineup patch.
+            git push || {
+              echo "push rejected, rebasing once more"
+              git pull --rebase --autostash origin main
+              git push
+            }
+          fi
