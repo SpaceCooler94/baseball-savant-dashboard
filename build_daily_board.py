@@ -72,6 +72,7 @@ import requests
 import mlb_model as M
 import recent_form as RF
 import zone_engine as Z
+import situational as SIT
 
 # FAIL FAST on model/build version skew. This build script (schema 5.5)
 # requires mlb_model >= v5.4 (MODEL_VERSION constant + rawPerGame in the
@@ -94,7 +95,7 @@ USER_AGENT = "mlb-daily-board/1.0 (personal analytics pipeline)"
 
 MIN_PA = 25                 # pool floor, matches the model's MIN_PA
 SPLIT_SIT_CODES = "vl,vr"
-BOARD_SCHEMA_VERSION = 5.6   # 5.6: projected lineup slots -> per-row expectedPA   # 5.5: recent-form/profiles/mix-drift/zone layer (reference only; modelVersion unchanged)
+BOARD_SCHEMA_VERSION = 5.7   # 5.7: bullpen fatigue, wind/umpire context, rest-travel; real temp data (see situational.py header re: the previously-dead ctx[weather] term)   # 5.6: projected lineup slots -> per-row expectedPA   # 5.5: recent-form/profiles/mix-drift/zone layer (reference only; modelVersion unchanged)
 LEAGUE_K_PER_BF_PCT = 22.0   # rough league K%/BF baseline for angle thresholds
 
 # Publish gates: don't overwrite a good served board with a hollow one.
@@ -154,6 +155,8 @@ HEALTH = {
     "recentFormOk": False,
     "lineupSlotsOk": False,
     "lineupSlotCount": 0,
+    "bullpenFatigueOk": False,
+    "restTravelOk": False,
     "zoneCacheOk": False,
     "zoneCacheAsOf": None,
     "warnings": [],
@@ -609,10 +612,48 @@ def get_pitcher_rates(pid):
     return result
 
 
+def fetch_schedule_range(days_back=3):
+    """Small JSON schedule pull for the last N days, ALL teams -- not a
+    Statcast pull. Powers rest/travel only. One call regardless of slate size."""
+    end = NOW_ET.date()
+    start = end - datetime.timedelta(days=days_back)
+    return http_json(
+        f"{STATS_API}/schedule?sportId=1&startDate={start.isoformat()}"
+        f"&endDate={end.isoformat()}"
+    )
+
+
+def flatten_schedule_range(sched_range):
+    """StatsAPI date-range schedule -> [{"date","hour","team"}] for both sides
+    of every game, in THIS FILE's team codes. situational.parse_rest_travel
+    takes this flat, already-normalized list and never sees a StatsAPI team
+    name -- the same discipline norm_team()/TEAM_NAME_TO_ABBR already enforce
+    everywhere else in this file."""
+    out = []
+    if not isinstance(sched_range, dict):
+        return out
+    for date in sched_range.get("dates", []):
+        for g in date.get("games", []):
+            game_date = g.get("gameDate") or ""
+            try:
+                hour = int(game_date[11:13])
+            except (ValueError, IndexError):
+                hour = None
+            for side in ("home", "away"):
+                team = (g.get("teams", {}).get(side, {}) or {}).get("team", {}) or {}
+                abbr = TEAM_NAME_TO_ABBR.get(team.get("name")) or norm_team(team.get("abbreviation"))
+                if abbr:
+                    out.append({"date": game_date[:10], "hour": hour, "team": abbr})
+    return out
+
+
 def get_schedule():
     data = http_json(
         f"{STATS_API}/schedule?sportId=1&date={TODAY}"
-        "&hydrate=probablePitcher(note),team,venue,linescore"
+        # weather + officials added for situational.py -- same call, zero new
+        # network cost. Both hydrates are best-effort: situational.py's parsers
+        # degrade to None on any shape this doesn't confirm against live data.
+        "&hydrate=probablePitcher(note),team,venue,linescore,weather,officials"
     )
     games = []
     for date in data.get("dates", []):
@@ -748,6 +789,27 @@ def compute_angles(row, opp):
         elif q <= 0.25:
             add("sp_hr9_stingy", "Stingy arm: %.2f HR/9, bottom %d%% of slate"
                 % (opp["hrPer9"], round(q * 100)), "orange")
+    # Opposing bullpen fatigue, slate-relative. UNPROVEN, same footing as
+    # SP HR/9 -- never checked against settled outcomes yet.
+    bq = row.get("oppBullpenPctl")
+    if bq is not None and bq >= 0.75 and row.get("oppBullpenL3"):
+        add("bullpen_taxed", "Opposing bullpen heavily used lately (%d relief pitches, top %d%% of slate)"
+            % (row["oppBullpenL3"], round((1 - bq) * 100)), "green")
+
+    # Wind. Genuinely new -- never fed into raw probability (unlike temp,
+    # which was always a designed model input, just dormant). UNPROVEN.
+    wm, wd = row.get("windMph"), row.get("windDir")
+    if wm is not None and wm >= 8:
+        if wd == "out":
+            add("wind_out", "Wind blowing out %.0f mph" % wm, "green")
+        elif wd == "in":
+            add("wind_in", "Wind blowing in %.0f mph" % wm, "orange")
+
+    # Rest/travel. A day game after a night game is a soft spot, not a
+    # positive -- filed as a caution, never a green flag.
+    if row.get("restFlag") == "day_after_night":
+        add("day_after_night", "Day game after a night game", "orange")
+
     zg = row.get("zoneGrade")
     n_strong = len(row.get("zoneStrong") or []) or 1
     if zg == "elite":
@@ -792,6 +854,23 @@ def project_side(hitters, opp_pitcher, ctx, league, calibration, extras=None):
             rf = dict(rf)
             if rf.get("profile"):
                 rf["profileEmoji"] = RF.PROFILES[rf["profile"]]["emoji"]
+
+        # Opposing team's bullpen fatigue, graded against the SLATE the same
+        # way SP HR/9 is -- a raw pitch count means nothing without knowing
+        # what a "normal" trailing-3-day workload looks like tonight.
+        opp_team = (opp_pitcher or {}).get("teamAbbr")
+        bp = (ex.get("bullpen") or {}).get(opp_team)
+        bp_l3 = bp["reliefPitches"] if bp else None
+        bp_pctl = pctl_in(ex.get("bullpenPool") or [], bp_l3)
+
+        # This hitter's OWN team's rest/travel state.
+        rest = SIT.parse_rest_travel(h["teamAbbr"], ex.get("flatGames") or [], ex.get("today"))
+        rest_flag = None
+        if rest:
+            if rest["dayAfterNight"]:
+                rest_flag = "day_after_night"
+            elif rest["backToBack"]:
+                rest_flag = "b2b"
         zone_score, zone_grade, strong_list = None, None, None
         zone_cache = ex.get("zoneCache")
         used = set((opp_pitcher or {}).get("_usedZones") or [])
@@ -824,6 +903,12 @@ def project_side(hitters, opp_pitcher, ctx, league, calibration, extras=None):
             "zoneScore": zone_score,
             "zoneGrade": zone_grade,
             "zoneStrong": strong_list,
+            "oppBullpenL3": bp_l3,
+            "oppBullpenPctl": bp_pctl,
+            "restFlag": rest_flag,
+            "gamesL3": rest["gamesL3"] if rest else None,
+            "windMph": ctx.get("windMph"),
+            "windDir": ctx.get("windDir"),
             "confidence": confidence(h.get("pa"),
                                      (opp_pitcher or {}).get("battersFaced"),
                                      hit["dataQuality"], hr["dataQuality"]),
@@ -885,7 +970,7 @@ def fetch_recent_layer():
     loaded from disk (updated by zone_engine.py in the workflow). All
     best-effort: a failure here degrades to a board without the recent-form
     layer, never a failed build."""
-    rf_batters, rf_pitchers, rf_df, rf_slots = {}, {}, None, {}
+    rf_batters, rf_pitchers, rf_df, rf_slots, bullpen = {}, {}, None, {}, {}
     # ISOLATED FAILURE DOMAINS. These four derivations share one Statcast pull
     # but are otherwise independent, and wrapping them in a single try meant one
     # bad column killed all of them. That happened on 2026-08-08: a pandas
@@ -903,6 +988,7 @@ def fetch_recent_layer():
             ("batter form", RF.batter_form, "batters"),
             ("pitcher recent", RF.pitcher_recent, "pitchers"),
             ("lineup slots", RF.lineup_slots, "slots"),
+            ("bullpen fatigue", SIT.bullpen_fatigue, "bullpen"),
         ):
             try:
                 result = fn(rf_df)
@@ -919,8 +1005,10 @@ def fetch_recent_layer():
                 rf_batters = result
             elif sink == "pitchers":
                 rf_pitchers = result
-            else:
+            elif sink == "slots":
                 rf_slots = result
+            else:
+                bullpen = result
         HEALTH["recentFormOk"] = bool(rf_batters)
         HEALTH["lineupSlotsOk"] = bool(rf_slots)
         HEALTH["lineupSlotCount"] = len(rf_slots)
@@ -934,7 +1022,7 @@ def fetch_recent_layer():
             warn("zones_cache.json missing -- run zone_engine.py (see --backfill)")
     except Exception as e:
         warn(f"zone cache load failed ({type(e).__name__})")
-    return rf_batters, rf_pitchers, rf_df, zone_cache, rf_slots
+    return rf_batters, rf_pitchers, rf_df, zone_cache, rf_slots, bullpen
 
 
 def enrich_probable(pd_dict, pid, rf_pitchers, rf_df):
@@ -961,8 +1049,29 @@ def build_board():
     pool = build_batter_pool()
     savant = fetch_savant_metrics()
     pitch_mix = fetch_pitcher_pitch_mix()
-    rf_batters, rf_pitchers, rf_df, zone_cache, rf_slots = fetch_recent_layer()
-    extras = {"rfBatters": rf_batters, "zoneCache": zone_cache}
+    rf_batters, rf_pitchers, rf_df, zone_cache, rf_slots, bullpen_raw = fetch_recent_layer()
+    # bullpen_fatigue returns RAW Statcast team codes; normalize here, once,
+    # the same way every other team-keyed dict in this file already is.
+    bullpen = {}
+    for k, v in (bullpen_raw or {}).items():
+        code = norm_team(k)
+        if code:
+            bullpen[code] = v
+    bullpen_pool = sorted(v["reliefPitches"] for v in bullpen.values()) if bullpen else []
+
+    flat_games = []
+    try:
+        sched_range = fetch_schedule_range()
+        flat_games = flatten_schedule_range(sched_range)
+    except Exception as e:
+        warn(f"schedule-range fetch failed ({type(e).__name__}: {e}) -- rest/travel skipped")
+    if not flat_games:
+        warn("flatten_schedule_range returned no data -- rest/travel will be null on every row")
+    HEALTH["bullpenFatigueOk"] = bool(bullpen)
+    HEALTH["restTravelOk"] = bool(flat_games)
+
+    extras = {"rfBatters": rf_batters, "zoneCache": zone_cache, "bullpen": bullpen,
+              "bullpenPool": bullpen_pool, "flatGames": flat_games, "today": TODAY}
     for h in pool:
         h["_savant"] = savant.get(_norm_name(h.get("name")), {})
         # PROJECTED lineup slot, from the batter's own recent starts. Until now
@@ -1025,15 +1134,27 @@ def build_board():
         if hp and home_prob:
             hp = dict(hp)  # cached dict -- don't mutate the shared copy
             hp["name"] = home_prob.get("fullName")
+            hp["teamAbbr"] = home_abbr  # for bullpen-fatigue lookup in project_side
             hp["pitchMix"] = pitch_mix.get(_norm_name(hp["name"]))
             enrich_probable(hp, home_prob.get("id"), rf_pitchers, rf_df)
         if ap and away_prob:
             ap = dict(ap)
             ap["name"] = away_prob.get("fullName")
+            ap["teamAbbr"] = away_abbr
             ap["pitchMix"] = pitch_mix.get(_norm_name(ap["name"]))
             enrich_probable(ap, away_prob.get("id"), rf_pitchers, rf_df)
 
-        ctx = {"park": park, "weather": {}}  # weather omitted in v1; model treats temp=None safely
+        # REAL weather now, not the always-empty dict this used to be. This
+        # fixes mlb_model.project_hr's temp nudge -- ctx["weather"]["temp"]
+        # has been a designed input since v5.0 that was always None because
+        # nothing upstream ever populated it. See situational.py's header for
+        # why that doesn't need a MODEL_VERSION bump (the math is unchanged;
+        # a previously-dormant input starts being real). Wind is genuinely
+        # new and stays reference-only -- see compute_angles.
+        weather = SIT.parse_weather(g.get("weather"))
+        ctx = {"park": park, "weather": {"temp": weather["tempF"]},
+               "windMph": weather["windMph"], "windDir": weather["windDir"]}
+        umpire = SIT.home_plate_umpire(g.get("officials"))
 
         home_hitters = project_side(by_team.get(home_abbr, []), ap, ctx, league, calibration, extras)
         away_hitters = project_side(by_team.get(away_abbr, []), hp, ctx, league, calibration, extras)
@@ -1059,7 +1180,9 @@ def build_board():
             "gameTime": g.get("gameDate"),
             "venue": (g.get("venue") or {}).get("name"),
             "venueParkFactor": park,
-            "weather": {},
+            "weather": {"tempF": weather["tempF"], "windMph": weather["windMph"],
+                       "windDir": weather["windDir"], "condition": weather["condition"]},
+            "homeplateUmpire": umpire,  # name only -- see situational.home_plate_umpire
             "homeTeam": {"name": home.get("name"), "abbr": home_abbr},
             "awayTeam": {"name": away.get("name"), "abbr": away_abbr},
             "homeProbable": slim_probable(hp),
