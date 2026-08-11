@@ -46,6 +46,10 @@ from zoneinfo import ZoneInfo
 import requests
 
 import mlb_model as M
+# tier_hit/tier_hr used to be reimplemented HERE as a second copy of the
+# cutoffs in mlb_model.py -- two definitions of one rule, and the one that
+# drifts is the one silently grading confirmed-lineup rows wrong. Removed;
+# M.tier_hit/M.tier_hr below are the only copy that exists now.
 
 ET = ZoneInfo("America/New_York")
 STATS_API = "https://statsapi.mlb.com/api/v1"
@@ -107,14 +111,6 @@ def parse_lineups(sched):
     return out
 
 
-def tier_hit(p):
-    return "A" if p >= .70 else "B" if p >= .60 else "C" if p >= .50 else "D"
-
-
-def tier_hr(p):
-    return "A" if p >= .20 else "B" if p >= .13 else "C" if p >= .07 else "D"
-
-
 def repatch_row(row, slot, calibration):
     """Recompute one row for a known lineup slot. Returns True if changed.
     Uses the model's own game_prob/apply_calibration/expected_pa so this can
@@ -139,8 +135,8 @@ def repatch_row(row, slot, calibration):
     p_hr, _ = M.apply_calibration(rg_hr, cal.get("hr"))
     row["hitProb"] = M._round3(p_hit)
     row["hrProb"] = M._round3(p_hr)
-    row["hitTier"] = tier_hit(row["hitProb"])
-    row["hrTier"] = tier_hr(row["hrProb"])
+    row["hitTier"] = M.tier_hit(row["hitProb"])
+    row["hrTier"] = M.tier_hr(row["hrProb"])
     return True
 
 
