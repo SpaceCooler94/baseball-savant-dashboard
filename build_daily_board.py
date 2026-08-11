@@ -95,7 +95,13 @@ USER_AGENT = "mlb-daily-board/1.0 (personal analytics pipeline)"
 
 MIN_PA = 25                 # pool floor, matches the model's MIN_PA
 SPLIT_SIT_CODES = "vl,vr"
-BOARD_SCHEMA_VERSION = 5.7   # 5.7: bullpen fatigue, wind/umpire context, rest-travel; real temp data (see situational.py header re: the previously-dead ctx[weather] term)   # 5.6: projected lineup slots -> per-row expectedPA   # 5.5: recent-form/profiles/mix-drift/zone layer (reference only; modelVersion unchanged)
+BOARD_SCHEMA_VERSION = 5.8   # 5.8: heart-zone xSLG (zone_engine's attackBatters cache)
+                              # 5.7: bullpen fatigue, wind/umpire context, rest-travel; real
+                              #      temp data (see situational.py, the previously-dead
+                              #      ctx[weather] term)
+                              # 5.6: projected lineup slots -> per-row expectedPA
+                              # 5.5: recent-form/profiles/mix-drift/zone layer (reference
+                              #      only; modelVersion unchanged)
 LEAGUE_K_PER_BF_PCT = 22.0   # rough league K%/BF baseline for angle thresholds
 
 # Publish gates: don't overwrite a good served board with a hollow one.
@@ -810,6 +816,22 @@ def compute_angles(row, opp):
     if row.get("restFlag") == "day_after_night":
         add("day_after_night", "Day game after a night game", "orange")
 
+    # Heart-zone xSLG vs season xSLG: does he punish pitches down the middle
+    # MORE than his overall damage numbers suggest, or less? Different question
+    # than barrels_due (season-wide) -- this isolates contact quality on the
+    # specific pitches a mistake-prone or gopher-ball-prone arm is most likely
+    # to leave him. UNPROVEN, same footing as every other zone-cache signal.
+    hxs = row.get("heartXslg")
+    sxs = (row.get("metrics") or {}).get("xSLG")
+    if hxs is not None and sxs is not None:
+        gap = hxs - sxs
+        if gap >= 0.070:
+            add("heart_masher", "Heart-zone xSLG runs %.3f above his season number -- "
+                "concentrated damage on pitches down the middle" % gap, "green")
+        elif gap <= -0.070:
+            add("heart_soft", "Heart-zone xSLG runs %.3f BELOW his season number -- "
+                "doesn't punish mistakes as much as the overall line suggests" % -gap, "orange")
+
     zg = row.get("zoneGrade")
     n_strong = len(row.get("zoneStrong") or []) or 1
     if zg == "elite":
@@ -874,11 +896,19 @@ def project_side(hitters, opp_pitcher, ctx, league, calibration, extras=None):
         zone_score, zone_grade, strong_list = None, None, None
         zone_cache = ex.get("zoneCache")
         used = set((opp_pitcher or {}).get("_usedZones") or [])
+        heart_xslg, heart_bbe = None, 0
         if zone_cache:
             strong = Z.strong_zones(zone_cache, h["id"])
             strong_list = sorted(strong) or None
             if used:
                 zone_score, zone_grade = Z.score_matchup(strong, used)
+            # Same cache, a different partition of the same batted balls --
+            # what this hitter does specifically to pitches down the middle,
+            # as distinct from strong_zones()'s barrel/HR read on the 1-9
+            # grid. See zone_engine.py's header for the Heart-boundary caveat:
+            # a documented approximation, not Savant's exact proprietary cut.
+            hz = Z.heart_zone_xslg(zone_cache, h["id"])
+            heart_xslg, heart_bbe = hz["xSLG"], hz["bbe"]
         row = {
             "hitterId": h["id"], "name": h["name"], "pos": h["pos"],
             "teamAbbr": h["teamAbbr"], "batSide": h.get("batSide"),
@@ -903,6 +933,8 @@ def project_side(hitters, opp_pitcher, ctx, league, calibration, extras=None):
             "zoneScore": zone_score,
             "zoneGrade": zone_grade,
             "zoneStrong": strong_list,
+            "heartXslg": heart_xslg,
+            "heartBBE": heart_bbe,
             "oppBullpenL3": bp_l3,
             "oppBullpenPctl": bp_pctl,
             "restFlag": rest_flag,
