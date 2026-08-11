@@ -233,6 +233,21 @@ def _round3(v):
     return _js_round(v * 1000) / 1000
 
 
+# Named, importable, and the ONLY place these cutoffs are allowed to live.
+# refresh_lineups.py used to carry its own copy of these two lines as literals
+# -- harmless while they stayed in sync, but a silent-drift bug waiting to
+# happen: fix the thresholds here (they're flagged elsewhere as stale
+# post-calibration) and the lineup-refresh job keeps grading confirmed rows
+# against the old ones, with no error to notice it by. One function, two
+# call sites (below, and refresh_lineups.repatch_row), can't drift.
+def tier_hit(per_game):
+    return "A" if per_game >= .70 else "B" if per_game >= .60 else "C" if per_game >= .50 else "D"
+
+
+def tier_hr(per_game):
+    return "A" if per_game >= .20 else "B" if per_game >= .13 else "C" if per_game >= .07 else "D"
+
+
 def _pitcher_rate(p, field, prior_bf, league_rate):
     """v5.3: pitcher rates are shrunk toward league by batters faced. A 45-BF
     spot starter's inflated/deflated rates no longer swing every hitter in
@@ -264,7 +279,7 @@ def project_hit(h, p, ctx, league, calibration=None):
     cal_hit = calibration.get("hit") if calibration else None
     per_game, applied = apply_calibration(raw_per_game, cal_hit)
     per_pa = raw_per_pa  # perPA is always raw as of v5.4
-    tier = "A" if per_game >= .70 else "B" if per_game >= .60 else "C" if per_game >= .50 else "D"
+    tier = tier_hit(per_game)
     sig, risk = [], []
     season_rate = None
     if _nv(h.get("obp")) is not None and _nv(h.get("bbPct")) is not None:
@@ -343,7 +358,7 @@ def project_hr(h, p, ctx, league, calibration=None):
     cal_hr = calibration.get("hr") if calibration else None
     per_game, applied = apply_calibration(raw_per_game, cal_hr)
     per_pa = raw_per_pa  # perPA is always raw as of v5.4
-    tier = "A" if per_game >= .20 else "B" if per_game >= .13 else "C" if per_game >= .07 else "D"
+    tier = tier_hr(per_game)
     sig, risk = [], []
     if pitcher_rate is not None and pitcher_rate > league["hrRatePerPA"] * 1.25:
         sig.append({"label": "HR-prone pitcher", "cls": "green"})
