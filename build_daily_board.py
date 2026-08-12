@@ -730,6 +730,31 @@ def pctl_in(sorted_vals, v):
     return round(lo / len(sorted_vals), 3)
 
 
+def arsenal_overlap_count(vs_pitch, pitch_mix):
+    """How many of the SP's CORE (>=15% usage) pitches does this batter
+    already hit well? Same inputs pitch_fit() already blends into one number
+    -- this un-blends it into a count, the discrete version of "pitch-type
+    overlap." BA_WIN reuses fit_pos's existing .300 bar rather than inventing
+    a fourth threshold next to the .300/.200 already in use. Returns
+    (wins, core_total); (0, 0) if there's nothing to compare."""
+    if not vs_pitch or not pitch_mix:
+        return 0, 0
+    by_pitch = {}
+    for v in vs_pitch:
+        name = str(v.get("pitch") or "").strip().lower()
+        if name:
+            by_pitch[name] = v
+    core = RF.core_mix(pitch_mix)
+    wins = 0
+    for m in core:
+        key = str(m.get("pitch") or "").strip().lower()
+        v = by_pitch.get(key)
+        ba = nv(v.get("ba")) if v else None
+        if ba is not None and ba >= 0.300:
+            wins += 1
+    return wins, len(core)
+
+
 def compute_angles(row, opp):
     """Deterministic betting-angle flags, each with a STABLE key -- settle.py
     stamps keys onto ledger rows so every angle's residual lift is measurable
@@ -801,6 +826,17 @@ def compute_angles(row, opp):
     if bq is not None and bq >= 0.75 and row.get("oppBullpenL3"):
         add("bullpen_taxed", "Opposing bullpen heavily used lately (%d relief pitches, top %d%% of slate)"
             % (row["oppBullpenL3"], round((1 - bq) * 100)), "green")
+
+    # Pitch-type overlap: how many of the SP's core pitches does he already
+    # hit well. One of the three ingredients Zone Dominance (client-side)
+    # combines with bullpen_taxed and zone_elite/heart_masher -- computed here
+    # so it's ledger-stamped like everything else, not just eyeballed.
+    vs_pitch = (row.get("metrics") or {}).get("vsPitch")
+    pitch_mix = (opp or {}).get("pitchMix")
+    wins, core_total = arsenal_overlap_count(vs_pitch, pitch_mix)
+    if core_total and wins >= 2:
+        add("arsenal_overlap", "Hits %d of his %d core pitches (.300 BA) well"
+            % (wins, core_total), "green")
 
     # Wind. Genuinely new -- never fed into raw probability (unlike temp,
     # which was always a designed model input, just dormant). UNPROVEN.
@@ -925,6 +961,14 @@ def project_side(hitters, opp_pitcher, ctx, league, calibration, extras=None):
             "slotSource": ("projected" if h.get("_slot") else "default"),
             "slotLast": (h.get("_slot") or {}).get("lastSlot"),
             "slotGames": (h.get("_slot") or {}).get("games"),
+            # startPct has been computed by lineup_slots() since it shipped --
+            # share of the window's team-games this batter actually started --
+            # but was never copied out to the row. It's the direct answer to
+            # "how much should I trust a projected slot before it confirms":
+            # a regular who started 10/10 recent games is a safe projection;
+            # a platoon bat who started 6/10 is not, and betting that number
+            # before the lineup posts is a real, different risk.
+            "slotStartPct": (h.get("_slot") or {}).get("startPct"),
             "pitchFitBA": fit_ba,
             "pitchFitCoverage": fit_cov,
             "coreFitBA": core_fit_ba,
