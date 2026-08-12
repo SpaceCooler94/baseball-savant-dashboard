@@ -108,6 +108,69 @@ def game_prob(per_pa, n):
     return 1 - math.pow(1 - clamp01(per_pa), n)
 
 
+def count_pmf(per_pa, n, k):
+    """P(exactly k successes) in n trials at rate per_pa, n and k both allowed
+    to be non-integer-consistent -- n is a continuous expected-PA value (never
+    a whole number in this pipeline), same as game_prob() already assumes.
+
+    Exact generalization, not an approximation: the generalized binomial
+    coefficient C(n,k) = n(n-1)...(n-k+1)/k! is the standard extension of n-
+    choose-k to real n (the same one underlying the generalized binomial
+    theorem), and it reduces to the ordinary binomial coefficient whenever n
+    is a positive integer. Critically, C(n,0)=1 for any n, so count_pmf(p,n,0)
+    = (1-p)^n and 1-count_pmf(p,n,0) = game_prob(p,n) EXACTLY -- this does not
+    introduce a second, slightly-different formula for "at least one" next to
+    the one the calibration ledger was fit against; it's the same formula,
+    extended to k>1 by the one mathematically standard route.
+    """
+    p = clamp01(per_pa)
+    if k == 0:
+        return math.pow(1 - p, n)
+    c = 1.0
+    for i in range(k):
+        c *= (n - i)
+    c /= math.factorial(k)
+    return c * math.pow(p, k) * math.pow(1 - p, n - k)
+
+
+def count_ge(per_pa, n, k):
+    """P(X >= k) = 1 - sum_{i=0}^{k-1} P(X=i). k=1 reduces exactly to
+    game_prob(per_pa, n) -- see count_pmf()'s docstring.
+
+    Clamped to [0,1] directly here, NOT via clamp01() -- that helper floors at
+    0.001, which is the right business-facing floor for a CALIBRATED, k=1-
+    scale probability (game_prob's usual range), but wrong here: a true
+    "3+ HRs in a game" tail is often genuinely smaller than 0.001, and
+    silently flooring it there would inflate a real long-shot price and also
+    collapse distinct k values to the same floored number, breaking
+    monotonicity. The only clamping needed at this stage is protecting
+    against sub-epsilon floating-point negatives from the alternating-sign
+    series at k > n (expected, harmless, and not a probability floor)."""
+    if k <= 0:
+        return 1.0
+    return max(0.0, min(1.0, 1 - sum(count_pmf(per_pa, n, i) for i in range(k))))
+
+
+def milestone_prob(raw_per_pa, n, k, cal_block):
+    """Calibrated P(X >= k) for a milestone line (k=1 is the existing anytime
+    market; k=2,3.. are the Over-1.5/Over-2.5 alternate lines).
+
+    HONESTY NOTE: calibration (cal_block) was fit ONLY on the k=1 outcome --
+    there is no settled ledger data yet for "2+ HRs in a game" to fit a
+    separate correction against. Reusing apply_calibration() here is a
+    deliberate, disclosed extrapolation: Platt scaling is a monotonic
+    reshaping of a raw probability via its log-odds, which is well-defined for
+    any probability regardless of which event it describes, but its accuracy
+    at k>=2 has not been independently checked the way k=1 has (2000+ row
+    gate, validation split, etc.). Treat k>=2 prices as reference until the
+    ledger can validate them on their own -- same posture as every other
+    unproven signal in this pipeline.
+    """
+    raw = count_ge(raw_per_pa, n, k)
+    calibrated, _ = apply_calibration(raw, cal_block)
+    return _round3(raw), _round3(calibrated)
+
+
 def _finite(v):
     try:
         return v is not None and math.isfinite(float(v))
