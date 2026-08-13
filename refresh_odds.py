@@ -170,10 +170,48 @@ def apply_odds_to_row(row, odds_for_player, cal_by_stat):
                     "edge": edge,
                 }
                 wrote = True
+                # Ledger-stamp real edges as an angle, the same generic
+                # mechanism every other reference signal already rides (no new
+                # settle.py code needed -- it already captures every key in
+                # row["angles"]). Gated on the SAME quality bar the client
+                # applies: HIGH confidence, no small-sample risk flag. A
+                # 2026-08-13 board found the biggest "edges" were almost all
+                # low-confidence/thin-sample players whose calibrated
+                # probability was itself untrustworthy -- stamping those into
+                # the ledger unfiltered would teach a future measurement that
+                # noise is signal. Scoped to point==0.5 only: settle.py grades
+                # gotHit/gotHR as at-least-one outcomes, so a k=2/k=3 edge has
+                # no corresponding settled result to check it against yet.
+                if (edge is not None and edge >= 0.08 and point == 0.5
+                        and row.get("confidence") == "high"
+                        and not any("small sample" in str(x.get("label", "")).lower()
+                                    for x in (row.get("hrRisks" if stat == "hr" else "hitRisks") or []))):
+                    row.setdefault("angles", []).append({
+                        "key": f"book_edge_{book_key}",
+                        "label": f"{'HR' if stat=='hr' else 'Hit'} edge vs {book_key}: "
+                                 f"model {cal_p*100:.1f}% vs {'+' if over>0 else ''}{over:.0f} "
+                                 f"({edge*100:+.1f}%)",
+                        "cls": "green",
+                    })
             stat_out[str(point)] = entry
         if stat_out:
             row.setdefault("bookOdds", {})[stat] = stat_out
     return wrote
+
+
+def archive_board(board, today):
+    """Same fix as refresh_lineups.py's archive_board() -- see its docstring
+    for the full reasoning. For odds specifically this closes an even bigger
+    gap: without it, bookOdds/edge data NEVER reaches anything settle.py
+    reads, since it only ever lands in the live daily_board.json, which the
+    archive was frozen before this script ever runs. There would be no way,
+    ever, to check historically whether an edge was real."""
+    try:
+        os.makedirs("boards", exist_ok=True)
+        atomic_write_json(os.path.join("boards", f"{today}.json"), board)
+    except Exception as e:
+        print(f"  archive re-write failed (live board is fine): {type(e).__name__}: {e}",
+              file=sys.stderr)
 
 
 def atomic_write_json(path, obj):
@@ -266,6 +304,7 @@ def main():
     board["oddsRefreshedAt"] = datetime.datetime.now(ET).isoformat(timespec="minutes")
     board["oddsEventsMatched"] = events_matched
     atomic_write_json(path, board)
+    archive_board(board, today)
     remaining = last_headers.get("x-requests-remaining", "?")
     used_last = last_headers.get("x-requests-last", "?")
     print(f"Odds patched: {events_matched} events matched, {rows_patched} player-rows updated. "
