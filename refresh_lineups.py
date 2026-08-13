@@ -198,6 +198,33 @@ def resort(board):
             (g.get(side) or []).sort(key=lambda x: x.get("viewScore", 0), reverse=True)
 
 
+def archive_board(board, today):
+    """Re-write boards/{today}.json to match the just-patched live board.
+
+    THE BUG THIS FIXES: daily_board.yml archives boards/{date}.json exactly
+    ONCE, at the morning build, before any lineup card has posted -- and
+    settle.py grades the NEXT day's outcomes against that frozen morning
+    snapshot, never the live board Chris actually saw and bet from. Every
+    lineup confirmation this script makes has been improving daily_board.json
+    all day while the archive stayed stuck at 6am projections. The calibration
+    ledger has been fit this whole time against worse data than what was
+    actually shown.
+
+    Fix: re-archive after every successful patch, not just once. Safe to call
+    from every run (11am/4:30/7:30) -- confirmations only ever add
+    information, never remove it, so whichever refresh runs last simply
+    leaves the most complete snapshot. Same atomic-write safety as the live
+    file. Failure here is logged, never fatal -- the live board (what Chris
+    actually reads tonight) already patched successfully by the time this
+    runs, and that matters more than the archive."""
+    try:
+        os.makedirs("boards", exist_ok=True)
+        atomic_write_json(os.path.join("boards", f"{today}.json"), board)
+    except Exception as e:
+        print(f"  archive re-write failed (live board is fine): {type(e).__name__}: {e}",
+              file=sys.stderr)
+
+
 def atomic_write_json(path, obj):
     d = os.path.dirname(os.path.abspath(path)) or "."
     fd, tmp = tempfile.mkstemp(dir=d, prefix=".board_", suffix=".json")
@@ -251,6 +278,7 @@ def main():
     board["lineupRefreshedAt"] = datetime.datetime.now(ET).isoformat(timespec="minutes")
     board["lineupsConfirmedGames"] = stats["gamesConfirmed"]
     atomic_write_json(path, board)
+    archive_board(board, today)
     print(f"Lineups patched: {stats['gamesConfirmed']} games confirmed, "
           f"{stats['gamesPending']} still pending, "
           f"{stats['rowsConfirmed']} rows updated, {stats['rowsScratched']} scratched")
