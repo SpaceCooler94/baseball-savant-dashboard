@@ -52,13 +52,57 @@ PROFILES = {
 }
 
 
+STATCAST_CHUNK_DAYS = 4   # see fetch_statcast() -- this is the fix for a real
+                          # 2026-08-13 outage, not a preemptive guess
+
 def fetch_statcast(days=LOOKBACK_DAYS):
-    """Bulk pitch-level Statcast for the trailing window. The single network
-    call of this module; heavy (~tens of thousands of rows) but one call."""
+    """Bulk pitch-level Statcast for the trailing window, pulled in
+    STATCAST_CHUNK_DAYS-sized pieces and concatenated, not one request for the
+    whole window.
+
+    ROOT CAUSE THIS FIXES: on 2026-08-13 a single statcast() call over the
+    full LOOKBACK_DAYS window failed with Baseball Savant's own "Query
+    Timeout. Please try to limit your query to less data" -- and because this
+    is the ONE network call the whole module makes, that single failure took
+    out batter_form, pitcher_recent, lineup_slots, AND bullpen_fatigue
+    together (98 of 372 hitters fell back to a league-default slot that
+    morning, with zero projected slots at all). Same chunking discipline
+    zone_engine.py's update_cache() already uses for its incremental backfill
+    (chunk_days=7 there) -- smaller requests avoid the timeout in the first
+    place, and this module gets the added benefit that a bad chunk now costs
+    only that chunk's days, not the whole pull.
+
+    DELIBERATELY DIFFERENT from zone_engine.update_cache()'s chunk loop in one
+    way: that loop STOPS on the first failed chunk, because it advances a
+    sequential asOf watermark that must never claim coverage it doesn't have.
+    This function has no such invariant -- it's gathering a trailing window,
+    not extending a cache -- so a failed chunk is skipped and the loop
+    continues, maximizing how much of the window survives one bad request
+    instead of discarding everything after it.
+    """
     from pybaseball import statcast
+    import pandas as pd
     end = datetime.datetime.now(ET).date()
     start = end - datetime.timedelta(days=days)
-    return statcast(start_dt=start.isoformat(), end_dt=end.isoformat())
+
+    frames = []
+    cur = start
+    while cur <= end:
+        chunk_end = min(cur + datetime.timedelta(days=STATCAST_CHUNK_DAYS - 1), end)
+        try:
+            piece = statcast(start_dt=cur.isoformat(), end_dt=chunk_end.isoformat())
+            if piece is not None and len(piece):
+                frames.append(piece)
+        except Exception as e:
+            print(f"WARN: statcast chunk {cur}..{chunk_end} failed "
+                  f"({type(e).__name__}: {e}) -- continuing with remaining chunks",
+                  file=sys.stderr)
+        cur = chunk_end + datetime.timedelta(days=1)
+
+    if not frames:
+        raise RuntimeError(
+            f"all statcast chunks failed for the {days}-day window -- no data to fold")
+    return pd.concat(frames, ignore_index=True)
 
 
 def _col(df, name):
