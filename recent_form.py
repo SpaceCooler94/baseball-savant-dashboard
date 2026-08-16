@@ -109,6 +109,24 @@ def _col(df, name):
     return name if name in df.columns else None
 
 
+def _iv(v):
+    """NA/malformed-safe int coercion for groupby keys (batter/pitcher ids).
+    Real Statcast data never sends a non-numeric id -- this exists because a
+    stress test surfaced that int(pid) crashes if it ever did, a latent
+    assumption batter_form()/lineup_slots() already share and this doesn't
+    change; new code here just doesn't inherit the same crash risk."""
+    try:
+        import pandas as _pd
+        if v is None or _pd.isna(v):
+            return None
+    except (TypeError, ValueError):
+        pass
+    try:
+        return int(v)
+    except (TypeError, ValueError):
+        return None
+
+
 def _f(v):
     """NA-safe float coercion.
 
@@ -183,9 +201,6 @@ def batter_form(df):
         pull_pct = _pull_pct(g, has)
         x_iso = None
         if has["estimated_ba_using_speedangle"] and has["estimated_slg_using_speedangle"]:
-            # _f() rather than `== itself`: these means are pd.NA when the
-            # column is all-null under nullable dtypes, and pd.NA in a boolean
-            # context raises.
             xba = _f(g[has["estimated_ba_using_speedangle"]].mean())
             xslg = _f(g[has["estimated_slg_using_speedangle"]].mean())
             if xba is not None and xslg is not None:
@@ -209,24 +224,13 @@ def batter_form(df):
     return out
 
 
-# Pull% via spray angle from hc_x/hc_y -- these are raw per-pitch Statcast
-# coordinates (not a leaderboard aggregate), so they're already present in the
-# bulk pull this module does; no extra network call. The hc_x/hc_y -> degrees
-# formula below is the standard community reverse-engineering of Savant's
-# coordinate system (MLB has never published it officially) and is what public
-# tools like baseballr's calculate_spray_angle use. Left of center (negative
-# angle) is pull for a RHB, right of center (positive) is pull for a LHB.
-# REFERENCE metric: not fed into log5, same as everything else in this module.
 _HOME_X, _HOME_Y = 125.42, 198.27
-_PULL_DEG = 15.0   # +/- this band around center counts as "straightaway"
+_PULL_DEG = 15.0
 
 def _pull_pct(g, has):
     if not (has["hc_x"] and has["hc_y"] and has["stand"]):
         return None
     import pandas as _pd
-    # to_numeric + astype(float) collapses nullable dtypes to plain NaN, so the
-    # comparisons below can never produce an NA-bearing mask (which is not a
-    # valid indexer and raises the same ambiguous-NA TypeError).
     x = _pd.to_numeric(g[has["hc_x"]], errors="coerce").astype(float)
     y = _pd.to_numeric(g[has["hc_y"]], errors="coerce").astype(float)
     side = g[has["stand"]].astype(str)
@@ -244,9 +248,6 @@ def _pull_pct(g, has):
 
 
 def classify_profile(f):
-    """DTP profile buckets. Returns profile key or None. Priority order:
-    insane > elite > flyball > line_drive. MIN_BBE gate first -- a profile off
-    8 batted balls is astrology."""
     if f["bbe"] < MIN_BBE:
         return None
     if f["barrelPct"] >= 18 and (f["hr"] + f["nearHr"]) >= 3:
@@ -260,50 +261,81 @@ def classify_profile(f):
     return None
 
 
+# --------------------------- bat speed (swing mechanics) ---------------------
+
+BAT_SPEED_MIN_SWINGS = 15   # same role as MIN_BBE -- floor before an average
+                            # means anything, same magnitude given a similar
+                            # per-game swing count to BBE count
+
+def bat_speed_form(df):
+    """DataFrame -> {batterId: {"swings": n, "games": k, "avgBatSpeed": mph,
+    "avgSwingLength": ft}} over the batter's last 10 distinct games -- same
+    recency window batter_form() uses, for the same reason (DTP's whole
+    premise is that recent form is a real, separate read from season rates).
+
+    DELIBERATELY NOT restricted to balls in play, unlike batter_form(): bat
+    speed and swing length are tracked by Hawk-Eye on every swing it follows,
+    contact or not -- a swing that missed still tells you about bat speed,
+    and restricting to BBE would silently bias the average toward swings that
+    already succeeded. Filtering on bat_speed.notna() rather than enumerating
+    which 'description' values count as a swing is deliberate: it lets the
+    data define what's tracked instead of guessing at Statcast's exact
+    swing-vs-take vocabulary, same instinct as _f()'s NA-safety fix above.
+
+    REFERENCE ONLY, same footing as every other signal in this module -- an
+    unproven angle until measure_signals.py's ledger check says otherwise.
+    """
+    need = ["batter", "game_pk", "bat_speed"]
+    if any(_col(df, c) is None for c in need):
+        return {}
+    import pandas as _pd
+    speed_col = _col(df, "bat_speed")
+    length_col = _col(df, "swing_length")
+    speed_num = _pd.to_numeric(df[speed_col], errors="coerce")
+    swings = df[speed_num.notna()].copy()
+    if swings.empty:
+        return {}
+    has_date = _col(swings, "game_date")
+    out = {}
+    for pid, g in swings.groupby("batter"):
+        pid = _iv(pid)
+        if pid is None:
+            continue
+        if has_date:
+            order = g.groupby("game_pk")[has_date].max().sort_values()
+            last_games = set(order.index[-10:])
+        else:
+            last_games = set(g["game_pk"].unique()[-10:])
+        g = g[g["game_pk"].isin(last_games)]
+        n = len(g)
+        if n < BAT_SPEED_MIN_SWINGS:
+            continue
+        avg_speed = _f(g[speed_col].mean())
+        avg_length = _f(g[length_col].mean()) if length_col else None
+        out[pid] = {
+            "swings": n,
+            "games": len(last_games),
+            "avgBatSpeed": round(avg_speed, 1) if avg_speed is not None else None,
+            "avgSwingLength": round(avg_length, 2) if avg_length is not None else None,
+        }
+    return out
+
+
 # ------------------------------ lineup slots ---------------------------------
 
-SLOT_DECAY = 0.88      # per game back; ~10-game effective window
-MIN_SLOT_GAMES = 3     # below this, no orderAvg -- the model falls back to 3.9
+SLOT_DECAY = 0.88
+MIN_SLOT_GAMES = 3
 
 
 def lineup_slots(df):
-    """{batterId: {"orderAvg": float, "games": int, "lastSlot": int, "startPct": float}}
-
-    Derived from the bulk Statcast pull already made for recent form -- NO extra
-    network call. The trick: in the first inning, batters come up in lineup
-    order, so the first nine distinct batters of each half-inning ARE that
-    team's batting order. Anyone appearing later (pinch hitter, defensive sub)
-    correctly gets no slot for that game.
-
-    WHY THIS MATTERS MORE THAN IT SOUNDS: expected_pa() spans 4.6 PA (leadoff)
-    to 3.75 (9-hole), which at league hit rates is ~8 points of hit probability.
-    Until now every hitter was projected at 3.9 PA because lineups aren't posted
-    at build time, so ALL of that variance was discarded -- more spread than the
-    model's measured end-to-end discrimination (6.9 pts, per the 2026-08-08
-    reliability table). Recovering it is the single largest available win.
-
-    Slots are recency-weighted (SLOT_DECAY per game back) because managers move
-    people; startPct is the share of the window's team-games this batter started,
-    which is the honest read on whether he's a regular or a bench bat."""
     need = ["batter", "game_pk", "at_bat_number", "inning_topbot"]
     if any(_col(df, c) is None for c in need):
         return {}
     has_date = _col(df, "game_date")
-    # READ THE WHOLE GAME, NOT JUST THE FIRST INNING.
-    # v1 filtered to inning 1 and required exactly nine distinct batters there,
-    # which is almost never true -- a half-inning ends after three outs, so a
-    # team usually sends 3-5 batters up in the first. Only an unusually big
-    # first inning qualified, so lineup_slots() returned {} on live data and
-    # every row silently fell back to 3.9 PA. (The unit test passed because the
-    # fixture put nine batters in inning 1 -- a fixture that matched the bug.)
-    # Ordering the full game by at_bat_number and taking the first nine distinct
-    # batters gives the same answer far more robustly: those nine ARE the
-    # lineup, since the order has to turn over before anyone repeats.
     first = df
 
-    # (game, half) -> ordered first nine distinct batters = that lineup
     per_batter = {}
-    team_games = {}          # (game_pk, half) counted once, keyed per lineup
+    team_games = {}
     game_dates = {}
     for (gpk, half), g in first.groupby(["game_pk", "inning_topbot"]):
         g = g.sort_values("at_bat_number")
@@ -315,7 +347,7 @@ def lineup_slots(df):
             if len(seen) == 9:
                 break
         if len(seen) < 9:
-            continue         # game never turned the order over; not readable
+            continue
         key = (gpk, half)
         team_games[key] = True
         if has_date:
@@ -323,12 +355,10 @@ def lineup_slots(df):
         for slot, b in enumerate(seen, start=1):
             per_batter.setdefault(b, []).append((key, slot))
 
-    # order the windows newest-first so decay weights are meaningful
     ordered = sorted(team_games.keys(),
                      key=lambda k: game_dates.get(k, ""), reverse=True)
     rank = {k: i for i, k in enumerate(ordered)}
 
-    # how many team-games each batter's club actually played in the window
     club_games = {}
     for b, entries in per_batter.items():
         club_games[b] = len({k for k, _ in entries})
@@ -349,9 +379,6 @@ def lineup_slots(df):
             "games": len(entries),
             "lastSlot": entries[0][1],
         }
-    # startPct needs the team's game count, which we approximate by the max
-    # games any of that batter's lineup-mates appeared in -- computed per game
-    # set rather than per club, since we never resolve team identity here.
     if out:
         maxg = max(v["games"] for v in out.values()) or 1
         for v in out.values():
@@ -361,11 +388,25 @@ def lineup_slots(df):
 
 # ---------------------------- pitcher recent (3) -----------------------------
 
+SHAPE_MIN_N = 8   # floor before a pitch's recent velo/spin/movement average
+                  # means anything -- lower than CORE_USAGE's implied count
+                  # deliberately: shape decay on even a show-me pitch is worth
+                  # surfacing, unlike usage/xSlg-based angles which need it to
+                  # be a CORE pitch to matter
+
 def pitcher_recent(df):
     """DataFrame -> {pitcherId: {"starts": k, "pitches": n, "mix": [
-    {"pitch", "usage", "xSlg", "hr", "n"}]}} over each pitcher's last
-    RECENT_STARTS games. xSlg is mean xSLG allowed on BBE off that pitch --
-    'is this pitch getting crushed lately'."""
+    {"pitch", "usage", "xSlg", "hr", "n", "avgVelo", "avgSpin", "avgExtension",
+    "avgHBreak", "avgVBreak"}]}} over each pitcher's last RECENT_STARTS games.
+    xSlg is mean xSLG allowed on BBE off that pitch -- 'is this pitch getting
+    crushed lately'. The shape fields (added alongside, same window) are
+    'is this pitch MOVING like it used to' -- a different and earlier
+    question than xSlg: velocity/spin/movement are measured on every pitch of
+    that type thrown in the window, not just the ones that got hit, so a
+    pitch can show shape decay before the results catch up. release_speed/
+    release_spin_rate/release_extension/pfx_x/pfx_z are standard raw Statcast
+    columns already present on every row this module's fetch_statcast()
+    pulls -- no new network call, same instinct as bat_speed_form() above."""
     need = ["pitcher", "game_pk", "pitch_name"]
     if any(_col(df, c) is None for c in need):
         return {}
@@ -373,8 +414,16 @@ def pitcher_recent(df):
     has_ev = _col(df, "events")
     has_xslg = _col(df, "estimated_slg_using_speedangle")
     has_type = _col(df, "type")
+    has_velo = _col(df, "release_speed")
+    has_spin = _col(df, "release_spin_rate")
+    has_ext = _col(df, "release_extension")
+    has_hbreak = _col(df, "pfx_x")
+    has_vbreak = _col(df, "pfx_z")
     out = {}
     for pid, g in df.groupby("pitcher"):
+        pid = _iv(pid)
+        if pid is None:
+            continue
         if has_date:
             order = g.groupby("game_pk")[has_date].max().sort_values()
             recent_games = list(order.index[-RECENT_STARTS:])
@@ -382,7 +431,7 @@ def pitcher_recent(df):
             recent_games = list(g["game_pk"].unique()[-RECENT_STARTS:])
         g = g[g["game_pk"].isin(recent_games)]
         total = len(g)
-        if total < 30:      # reliever cameo / opener -- not a mix read
+        if total < 30:
             continue
         mix = []
         for pitch, pg in g.groupby("pitch_name"):
@@ -398,20 +447,37 @@ def pitcher_recent(df):
                     xs = _f(bip[has_xslg].mean())
                     if xs is not None:
                         entry["xSlg"] = round(xs, 3)
+            if len(pg) >= SHAPE_MIN_N:
+                if has_velo:
+                    v = _f(pg[has_velo].mean())
+                    if v is not None:
+                        entry["avgVelo"] = round(v, 1)
+                if has_spin:
+                    s = _f(pg[has_spin].mean())
+                    if s is not None:
+                        entry["avgSpin"] = round(s, 0)
+                if has_ext:
+                    e = _f(pg[has_ext].mean())
+                    if e is not None:
+                        entry["avgExtension"] = round(e, 2)
+                if has_hbreak:
+                    hb = _f(pg[has_hbreak].mean())
+                    if hb is not None:
+                        entry["avgHBreak"] = round(hb, 2)
+                if has_vbreak:
+                    vb = _f(pg[has_vbreak].mean())
+                    if vb is not None:
+                        entry["avgVBreak"] = round(vb, 2)
             mix.append(entry)
         mix.sort(key=lambda m: m["usage"], reverse=True)
-        out[int(pid)] = {"starts": len(recent_games), "pitches": total,
-                         "gamePks": [int(x) for x in recent_games], "mix": mix[:8]}
+        out[pid] = {"starts": len(recent_games), "pitches": total,
+                    "gamePks": [int(x) for x in recent_games], "mix": mix[:8]}
     return out
 
 
 # ------------------------- drift + recent fit (3+4) --------------------------
 
 def mix_drift(recent, season_mix):
-    """Compare last-3-start usage vs season arsenal. Returns (drift_list,
-    crushed_list). Drift: any pitch whose usage moved >= DRIFT_PP percentage
-    points either way. Crushed: a CORE (>= 15%) recent pitch with recent
-    xSLG-allowed >= CRUSHED_XSLG or >= 2 HR allowed in the window."""
     drifts, crushed = [], []
     if not recent:
         return drifts, crushed
@@ -429,7 +495,6 @@ def mix_drift(recent, season_mix):
                 or (m.get("hr", 0) >= 2)):
             crushed.append({"pitch": m["pitch"], "usage": m["usage"],
                             "xSlg": m.get("xSlg"), "hr": m.get("hr", 0)})
-    # a season pitch that vanished from the recent mix is also drift
     recent_keys = {m["pitch"].strip().lower() for m in recent.get("mix", [])}
     for key, season_u in season_by.items():
         if season_u is not None and season_u >= DRIFT_PP and key not in recent_keys:
@@ -439,13 +504,53 @@ def mix_drift(recent, season_mix):
     return drifts, crushed
 
 
+SHAPE_DRIFT_VELO_MPH = 1.5    # recent velo down this much vs season = notable
+SHAPE_DRIFT_SPIN_RPM = 150    # recent spin down this much vs season = notable
+
+def pitch_shape_drift(recent, season_shape):
+    """recent: one pitcher's pitcher_recent() entry (has 'mix' with avgVelo/
+    avgSpin per pitch, when SHAPE_MIN_N cleared). season_shape: {pitchName
+    (any case): {"avgVelo":.., "avgSpin":..}} -- a season baseline supplied
+    BY THE CALLER. This module makes no network calls and has no opinion
+    about where the baseline comes from; build_daily_board.py owns that.
+
+    Returns entries for CORE pitches (>=15% recent usage -- DTP rule 4, same
+    bar mix_drift's crushed-pitch check already uses) whose velo or spin
+    DROPPED enough to flag vs that pitcher's own season number for the same
+    pitch. One-directional on purpose, unlike mix_drift()'s usage check:
+    throwing harder or spinning more than usual isn't a liability signal, so
+    only decay in one direction is worth surfacing here."""
+    out = []
+    if not recent:
+        return out
+    season_by = {str(k).strip().lower(): v for k, v in (season_shape or {}).items()}
+    for m in recent.get("mix", []):
+        if _f(m.get("usage")) is None or m["usage"] < CORE_USAGE:
+            continue
+        key = m["pitch"].strip().lower()
+        s = season_by.get(key)
+        if not s:
+            continue
+        row = {"pitch": m["pitch"]}
+        flagged = False
+        rv, sv = m.get("avgVelo"), s.get("avgVelo")
+        if rv is not None and sv is not None and (sv - rv) >= SHAPE_DRIFT_VELO_MPH:
+            row.update({"veloRecent": rv, "veloSeason": sv, "veloDelta": round(rv - sv, 1)})
+            flagged = True
+        rs, ss = m.get("avgSpin"), s.get("avgSpin")
+        if rs is not None and ss is not None and (ss - rs) >= SHAPE_DRIFT_SPIN_RPM:
+            row.update({"spinRecent": rs, "spinSeason": ss, "spinDelta": round(rs - ss, 0)})
+            flagged = True
+        if flagged:
+            out.append(row)
+    return out
+
+
 def core_mix(mix, min_usage=CORE_USAGE):
-    """DTP rule 4: the pitches a batter will actually see enough of."""
     return [m for m in (mix or []) if _f(m.get("usage")) and m["usage"] >= min_usage]
 
 
 if __name__ == "__main__":
-    # standalone smoke: fetch + print summary counts (needs network)
     df = fetch_statcast()
     b = batter_form(df)
     p = pitcher_recent(df)
