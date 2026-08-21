@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # ============================================================================
 # refresh_odds.py -- pulls real DraftKings/FanDuel milestone (Over 0.5/1.5/
-# 2.5) prices for HR and Hits props from The Odds API, joins them to today's
-# board by player name, and patches in the actual, correctly-computed edge:
+# 2.5) prices for HR props from The Odds API, joins them to today's board by
+# player name, and patches in the actual, correctly-computed edge:
 #
 #   edge = model_probability * book_decimal_odds - 1
 #
@@ -13,6 +13,13 @@
 # profitable at the price offered" are two separate, clearly labeled numbers,
 # never conflated into one.
 #
+# HR-ONLY as of the credit crunch: batter_hits_alternate dropped from
+# odds_api.MARKETS after running out of credits on the free tier (500/mo).
+# apply_odds_to_row()'s stat loop is unchanged and already generic --
+# "hit" simply never has odds to attach now, so it's skipped every time,
+# no crash, no special-casing needed. Re-add "hit" to MARKET_TO_STAT in
+# odds_api.py to bring hits back; nothing in this file needs to change.
+#
 # Same safety discipline as refresh_lineups.py: atomic write, refuses to
 # patch a board that isn't today's, retries with backoff on 429 (this
 # matters more here than for StatsAPI -- The Odds API explicitly rate-limits
@@ -20,14 +27,18 @@
 #
 # OPERATIONAL COST (read the docs before changing MARKETS/BOOKMAKERS in
 # odds_api.py -- this math changes if you do):
-#   2 markets (batter_home_runs_alternate, batter_hits_alternate)
+#   1 market (batter_home_runs_alternate, HR-only)
 #   x 1 region-equivalent (2 named bookmakers, and the docs price every group
 #     of <=10 named bookmakers as ONE region)
-#   = 2 credits PER EVENT, charged only for markets actually present in the
-#     response (empty markets/events are free).
-#   A 15-game slate = ~30 credits per full run. Three runs/day (paired with
-#   the existing lineup-refresh cadence) = ~90 credits/day, ~2,700/month --
-#   comfortably inside the lowest paid tier, and each run's actual cost is
+#   = 1 credit PER EVENT, charged only for markets actually present in the
+#     response (empty markets/events are free). Was 2 credits/event with
+#     hits included -- this halves every number below.
+#   A 15-game slate is therefore ~15 credits per full run. Three runs/day
+#   (paired with the existing lineup-refresh cadence) = ~45 credits/day,
+#   ~1,350/month. Still comfortably inside a $20-30/mo paid tier; on the
+#   FREE tier (500 credits/mo) this now covers roughly 11 full slate-days a
+#   month at 3 runs/day, or about 33 days at 1 run/day -- up from running dry
+#   in under a week at the old 2-market rate. Each run's actual cost is
 #   printed from the x-requests-* response headers rather than estimated.
 #
 # Usage: python refresh_odds.py [path/to/daily_board.json]
@@ -130,16 +141,19 @@ def fetch_event_odds(api_key, event_id):
 
 
 def apply_odds_to_row(row, odds_for_player, cal_by_stat):
-    """Patches row["bookOdds"] = {"hr": {...}, "hit": {...}} with, per
-    threshold actually offered by DK/FD: the model's calibrated price at that
-    SAME threshold (via mlb_model.milestone_prob, not just the board's
-    existing Over-0.5 number), the book's own devigged fair price, and the
-    real edge at each book.
+    """Patches row["bookOdds"] = {"hr": {...}} (HR-only for now, see module
+    docstring) with, per threshold actually offered by DK/FD: the model's
+    calibrated price at that SAME threshold (via mlb_model.milestone_prob,
+    not just the board's existing Over-0.5 number), the book's own devigged
+    fair price, and the real edge at each book.
 
     cal_by_stat: {"hr": cal_block_or_None, "hit": cal_block_or_None} -- HR and
     Hit calibrate independently (different scale/offset in calibration.json),
     so this takes both rather than one shared block; passing the wrong one to
-    the wrong stat would silently mis-price every HR-side edge.
+    the wrong stat would silently mis-price every HR-side edge. Still keyed
+    by both stats even though only "hr" has odds right now -- the loop below
+    is unchanged and generic, so re-enabling "hit" in odds_api.py needs no
+    edit here.
 
     Returns True if anything was written."""
     wrote = False
