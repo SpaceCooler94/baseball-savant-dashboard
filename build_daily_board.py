@@ -32,6 +32,7 @@ import mlb_model as M
 import recent_form as RF
 import zone_engine as Z
 import situational as SIT
+import pitch_shape_cache as PSC
 
 if not hasattr(M, "MODEL_VERSION"):
     sys.exit("FATAL: mlb_model.py is pre-v5.4 (no MODEL_VERSION). This build "
@@ -446,18 +447,17 @@ def fetch_pitcher_pitch_mix():
         usage_c = find_col(df, ["pitch_usage", "pitch_percent", "usage"])
         ba_c = find_col(df, ["ba"]); slg_c = find_col(df, ["slg"])
         woba_c = find_col(df, ["woba"])
-        # SEASON SHAPE BASELINE, added alongside usage/ba/slg/woba -- same df,
-        # zero new network cost, same "check don't assume" caution as
-        # everything else touching a column name not yet confirmed live.
-        # Candidate names cover the plausible pybaseball/Savant variants;
-        # find_col() degrades to None (not a crash, not a guess) if none
-        # match, so this is a pure upside try, never a new failure mode.
-        # UNVERIFIED until run against a real pull -- see recent_form.py's
-        # pitch_shape_drift() docstring for what consumes this.
-        velo_c = find_col(df, ["release_speed", "avg_speed", "velocity",
-                               "pitch_velocity", "avg_velocity"])
-        spin_c = find_col(df, ["release_spin_rate", "spin_rate", "avg_spin_rate",
-                               "spin_rate_avg"])
+        # Season shape baseline (avgVelo/avgSpin) USED to be extracted here
+        # off this same arsenal-stats pull. Removed: confirmed via a live
+        # Savant column-availability check that this leaderboard carries no
+        # velocity/spin columns at all -- the extraction never found a match
+        # on a real pull, HEALTH["savantPitcherShapeOk"] was always False,
+        # and this function warned about it every single run for something
+        # that was never going to change. That's noise, not a live health
+        # check, so it's gone. Real season shape now comes from
+        # pitch_shape_cache.py (season-long incremental cache over the raw
+        # Per-Pitch Statcast pull, which DOES carry these columns), wired
+        # into enrich_probable() directly by pitcher id -- see there.
         if name_c and pitch_c and usage_c:
             for _, row in df.iterrows():
                 k = _norm_name(row.get(name_c))
@@ -471,17 +471,10 @@ def fetch_pitcher_pitch_mix():
                 if ba_c: entry["ba"] = nv(row.get(ba_c))
                 if slg_c: entry["slg"] = nv(row.get(slg_c))
                 if woba_c: entry["woba"] = nv(row.get(woba_c))
-                if velo_c: entry["avgVelo"] = nv(row.get(velo_c))
-                if spin_c: entry["avgSpin"] = nv(row.get(spin_c))
                 mix.setdefault(k, []).append(entry)
             for k in mix:
                 mix[k] = sorted(mix[k], key=lambda x: x["usage"], reverse=True)[:5]
             HEALTH["savantPitcherArsenalOk"] = True
-            if velo_c or spin_c:
-                HEALTH["savantPitcherShapeOk"] = True
-            else:
-                warn("pitcher-arsenal: no velo/spin column recognized "
-                     f"in {list(df.columns)[:12]}... -- pitch_shape_drift will find nothing to compare")
         else:
             warn(f"pitcher-arsenal: required columns missing from {list(df.columns)[:8]}...")
     except Exception as e:
@@ -974,10 +967,26 @@ def fetch_recent_layer():
             warn("zones_cache.json missing -- run zone_engine.py (see --backfill)")
     except Exception as e:
         warn(f"zone cache load failed ({type(e).__name__})")
-    return rf_batters, rf_pitchers, rf_df, zone_cache, rf_slots, bullpen, rf_batspeed
+    # Same load/health pattern as zone_cache immediately above -- season pitch-
+    # shape baseline, replacing the arsenal-stats-based season_shape build
+    # that enrich_probable() used to construct (confirmed dead: the arsenal-
+    # stats leaderboard fetch_pitcher_pitch_mix() pulls has no velocity/spin
+    # columns at all, so avgVelo/avgSpin never populated there -- see that
+    # function's now-removed extraction block).
+    shape_cache = None
+    try:
+        shape_cache = PSC.load_cache()
+        if shape_cache:
+            HEALTH["shapeCacheOk"] = True
+            HEALTH["shapeCacheAsOf"] = shape_cache.get("asOf")
+        else:
+            warn("pitch_shape_cache.json missing -- run pitch_shape_cache.py (see --backfill)")
+    except Exception as e:
+        warn(f"pitch shape cache load failed ({type(e).__name__})")
+    return rf_batters, rf_pitchers, rf_df, zone_cache, rf_slots, bullpen, rf_batspeed, shape_cache
 
 
-def enrich_probable(pd_dict, pid, rf_pitchers, rf_df):
+def enrich_probable(pd_dict, pid, rf_pitchers, rf_df, shape_cache=None):
     rec = rf_pitchers.get(pid)
     if not rec:
         return
@@ -986,12 +995,16 @@ def enrich_probable(pd_dict, pid, rf_pitchers, rf_df):
     drifts, crushed = RF.mix_drift(rec, pd_dict.get("pitchMix"))
     pd_dict["mixDrift"] = drifts
     pd_dict["crushedPitches"] = crushed
-    # Season shape baseline comes from the SAME pitchMix entries -- see
-    # fetch_pitcher_pitch_mix()'s avgVelo/avgSpin addition. Built here rather
-    # than passed in separately so there's one source of truth for "this
-    # pitcher's season pitch mix" instead of two dicts that could drift.
-    season_shape = {m["pitch"]: {"avgVelo": m.get("avgVelo"), "avgSpin": m.get("avgSpin")}
-                    for m in (pd_dict.get("pitchMix") or []) if m.get("pitch")}
+    # Season shape baseline now comes from pitch_shape_cache.py, keyed
+    # directly by this pitcher's MLBAM id (pid) -- confirmed real, ledger-
+    # backed source, replacing the arsenal-stats-based build that used to
+    # sit here. That old version read avgVelo/avgSpin off pitchMix entries
+    # populated by fetch_pitcher_pitch_mix(), but that leaderboard has no
+    # velocity/spin columns at all (confirmed via a live Savant column
+    # check), so season_shape was silently empty every single run -- this
+    # is a real fix, not a refactor. Keyed by id rather than name also drops
+    # a whole class of name-matching risk the old pitchMix join carried.
+    season_shape = PSC.pitcher_shape_baseline(shape_cache, pid) if shape_cache else {}
     pd_dict["shapeDrift"] = RF.pitch_shape_drift(rec, season_shape)
     try:
         gpks = rec.get("gamePks") or []
@@ -1006,7 +1019,7 @@ def build_board():
     pool = build_batter_pool()
     savant = fetch_savant_metrics()
     pitch_mix = fetch_pitcher_pitch_mix()
-    rf_batters, rf_pitchers, rf_df, zone_cache, rf_slots, bullpen_raw, rf_batspeed = fetch_recent_layer()
+    rf_batters, rf_pitchers, rf_df, zone_cache, rf_slots, bullpen_raw, rf_batspeed, shape_cache = fetch_recent_layer()
     bullpen = {}
     for k, v in (bullpen_raw or {}).items():
         code = norm_team(k)
@@ -1078,13 +1091,13 @@ def build_board():
             hp["name"] = home_prob.get("fullName")
             hp["teamAbbr"] = home_abbr
             hp["pitchMix"] = pitch_mix.get(_norm_name(hp["name"]))
-            enrich_probable(hp, home_prob.get("id"), rf_pitchers, rf_df)
+            enrich_probable(hp, home_prob.get("id"), rf_pitchers, rf_df, shape_cache)
         if ap and away_prob:
             ap = dict(ap)
             ap["name"] = away_prob.get("fullName")
             ap["teamAbbr"] = away_abbr
             ap["pitchMix"] = pitch_mix.get(_norm_name(ap["name"]))
-            enrich_probable(ap, away_prob.get("id"), rf_pitchers, rf_df)
+            enrich_probable(ap, away_prob.get("id"), rf_pitchers, rf_df, shape_cache)
 
         weather = SIT.parse_weather(g.get("weather"))
         ctx = {"park": park, "weather": {"temp": weather["tempF"]},
