@@ -1,0 +1,73 @@
+# .github/workflows/pitch_shape_backfill.yml
+#
+# ONE-TIME (per season) pitch-shape-cache backfill, triggered manually from
+# the GitHub website or app -- no local shell needed. Pulls the whole season
+# of pitch-level Statcast in weekly chunks and commits pitch_shape_cache.json.
+# Direct mirror of umpire_backfill.yml's structure (itself a mirror of
+# zone_backfill.yml) -- same timeout, same concurrency group, same
+# install/commit/retry pattern -- so this repo has one proven backfill
+# shape, not three that can drift.
+#
+# WHY THIS EXISTS: pitch_shape_cache.py replaces the season-shape baseline
+# enrich_probable() used to build from the arsenal-stats leaderboard --
+# confirmed dead (no velocity/spin columns exist there at all), so
+# shapeDrift/pitch_decay has never fired on a real board. The code is wired
+# and tested (see build_daily_board.py's enrich_probable()), but the cache
+# itself starts empty until this runs once. After this, the existing
+# pitch_shape_cache.py logic keeps it current incrementally -- wire a daily
+# call into daily_board.yml the same way zone_engine's cache already is,
+# once this backfill confirms the season pull works end to end.
+#
+# Safe to leave in the repo: it only runs when you press the button.
+
+name: pitch-shape-backfill
+
+on:
+  workflow_dispatch:
+    inputs:
+      start_date:
+        description: "Season opener (YYYY-MM-DD)"
+        required: true
+        default: "2026-03-26"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: daily-board          # serialize with the daily run so pushes don't collide
+  cancel-in-progress: false
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90       # a full season of chunked Statcast pulls is slow --
+                              # same figure as umpire_backfill.yml, same shape of work
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        # Same requirements.txt discipline as the other backfill workflows --
+        # one dependency source, one set of versions, both environments.
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Backfill pitch shape cache
+        run: python pitch_shape_cache.py --backfill "${{ github.event.inputs.start_date }}"
+
+      - name: Commit cache
+        run: |
+          git config user.name "board-bot"
+          git config user.email "board-bot@users.noreply.github.com"
+          git add pitch_shape_cache.json
+          if git diff --cached --quiet; then
+            echo "Nothing to commit"
+          else
+            git commit -m "pitch shape cache backfill from ${{ github.event.inputs.start_date }} [skip ci]"
+            git pull --rebase --autostash origin main
+            git push || { git pull --rebase --autostash origin main; git push; }
+          fi
