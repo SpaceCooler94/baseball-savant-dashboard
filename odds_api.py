@@ -10,22 +10,25 @@
 #  - Player props require ONE event at a time:
 #    GET /v4/sports/baseball_mlb/events/{eventId}/odds
 #        ?apiKey=...&bookmakers=draftkings,fanduel
-#        &markets=batter_home_runs_alternate,batter_hits_alternate
+#        &markets=batter_home_runs_alternate
 #        &oddsFormat=american
-#  - Milestone (X+) markets use the _alternate market keys. Exact MLB keys,
-#    from the betting-markets reference page:
+#  - Milestone (X+) markets use the _alternate market keys. Exact MLB key
+#    in use, from the betting-markets reference page:
 #      batter_home_runs_alternate  -- Alternate batter home runs (Over/Under)
-#      batter_hits_alternate       -- Alternate batter hits (Over/Under)
-#    Each returns MULTIPLE point thresholds (0.5, 1.5, 2.5, ...) as separate
+#    Returns MULTIPLE point thresholds (0.5, 1.5, 2.5, ...) as separate
 #    Over/Under outcome pairs per player, all inside one market's outcomes
 #    list -- not one call per threshold.
+#    HR-only as of the credit crunch below -- batter_hits_alternate dropped
+#    to halve per-event cost. Re-add to MARKETS (and MARKET_TO_STAT) if the
+#    quota situation changes; parse_event_odds()/apply_odds_to_row() already
+#    handle "hit" generically and need no other change to bring it back.
 #  - Quota cost = [unique markets in the response] x [region-equivalent].
 #    Specifying bookmakers=draftkings,fanduel (2 books) is charged as ONE
 #    region (every group of <=10 named bookmakers = 1 region-equivalent), so
 #    asking for exactly these two books costs the SAME as asking for one.
-#    2 markets x 1 region-equivalent = 2 credits per event. A 15-game slate
-#    is therefore 30 credits per full pull -- see refresh_odds.py for the
-#    operational math and the run cadence this makes affordable.
+#    1 market x 1 region-equivalent = 1 credit per event now that hits is
+#    dropped (was 2 credits/event with both markets) -- see refresh_odds.py
+#    for the updated operational math this changes.
 #  - Response schema (event-odds endpoint specifically): outcomes carry BOTH
 #    "name" (Over/Under) and "description" (the player's name) -- description
 #    only appears on markets that are player-scoped, confirmed in the docs'
@@ -44,11 +47,12 @@
 import re
 import unicodedata
 
-MARKETS = "batter_home_runs_alternate,batter_hits_alternate"
+# HR-only: batter_hits_alternate dropped to cut per-event cost in half after
+# running out of credits on the free tier (500/mo) -- see header note above.
+MARKETS = "batter_home_runs_alternate"
 BOOKMAKERS = "draftkings,fanduel"
 MARKET_TO_STAT = {
     "batter_home_runs_alternate": "hr",
-    "batter_hits_alternate": "hit",
 }
 
 
@@ -120,7 +124,7 @@ def compute_edge(model_prob, book_price_american):
 def parse_event_odds(payload, markets=MARKET_TO_STAT):
     """One /events/{id}/odds response -> nested dict:
         {stat: {player_norm_name: {point: {book_key: {"over": price, "under": price}}}}}
-    stat is 'hr' or 'hit' (via MARKET_TO_STAT), not the raw market key -- so
+    stat is 'hr' (via MARKET_TO_STAT), not the raw market key -- so
     callers never need to know The Odds API's key names past this function.
 
     Defensive throughout: a malformed or partial bookmaker/market/outcome is
