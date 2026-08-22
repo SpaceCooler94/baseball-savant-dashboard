@@ -204,18 +204,30 @@ def pitcher_snapshot(entry):
     }
 
 
-def fold_boxscore(cache, box, seen_batters, seen_pitchers):
+def fold_boxscore(cache, box, game_pk, seen_batters, seen_pitchers):
     """One game's boxscore -> (1) records each participant's PRE-GAME
     snapshot into seen_batters/seen_pitchers using the CURRENT cache state,
     the first time they're seen today (a doubleheader's 2nd game must not
     re-snapshot off the 1st game's now-updated totals -- see module docstring),
-    then (2) folds this game's counts into the running cache. Mutates cache,
-    seen_batters, seen_pitchers in place; returns nothing. Caller (process_day)
-    only invokes this after ALL of a date's boxscores are already confirmed
-    fetched -- see the atomicity note in the module docstring."""
+    (2) folds this game's counts into the running cache, and (3) returns a
+    compact per-GAME record pairing each batter with the OPPOSING side's
+    starting pitcher and that batter's actual outcome this game -- the two
+    things a backtest needs beyond the rate snapshot (which pitcher a batter
+    actually faced, and what actually happened) that a day-level snapshot
+    alone can't answer, especially on a doubleheader day where the two games
+    have different opponents. Same simplification build_daily_board.py's live
+    board already makes: batters are scored against the STARTING pitcher only,
+    never every reliever they actually saw. Mutates cache/seen_batters/
+    seen_pitchers in place (rate side, unchanged); the per-game record is
+    returned fresh, so doubleheader games don't collide the way a pid-keyed
+    dict would. Caller (process_day) only invokes this after ALL of a date's
+    boxscores are already confirmed fetched -- see the atomicity note above."""
+    side_info = {}
     for side in ("home", "away"):
         team_block = box.get("teams", {}).get(side) or {}
         tabbr = (team_block.get("team") or {}).get("abbreviation")
+        starter_id = None
+        outcomes = []
         for _, p in (team_block.get("players") or {}).items():
             person = p.get("person") or {}
             pid_raw = person.get("id")
@@ -243,6 +255,11 @@ def fold_boxscore(cache, box, seen_batters, seen_pitchers):
                 e["hbp"] += int(nv(bat.get("hitByPitch")) or 0)
                 e["sf"] += int(nv(bat.get("sacFlies")) or 0)
                 e["hr"] += int(nv(bat.get("homeRuns")) or 0)
+                outcomes.append({
+                    "id": pid_raw, "name": name,
+                    "outcome": {"pa": int(pa), "hits": int(nv(bat.get("hits")) or 0),
+                                "hr": int(nv(bat.get("homeRuns")) or 0)},
+                })
 
             pit = stats.get("pitching") or {}
             bf = nv(pit.get("battersFaced"))
@@ -262,6 +279,23 @@ def fold_boxscore(cache, box, seen_batters, seen_pitchers):
                 e["hbp"] += int(nv(pit.get("hitBatsmen")) or 0)
                 e["sf"] += int(nv(pit.get("sacFlies")) or 0)
                 e["hr"] += int(nv(pit.get("homeRuns")) or 0)
+                if (nv(pit.get("gamesStarted")) or 0) >= 1:
+                    starter_id = pid_raw
+
+        side_info[side] = {"teamAbbr": tabbr, "starter": starter_id, "batters": outcomes}
+
+    home, away = side_info["home"], side_info["away"]
+    batters_out = []
+    for b in home["batters"]:
+        batters_out.append({**b, "team": home["teamAbbr"], "oppStarterId": away["starter"]})
+    for b in away["batters"]:
+        batters_out.append({**b, "team": away["teamAbbr"], "oppStarterId": home["starter"]})
+
+    return {
+        "gameId": game_pk, "home": home["teamAbbr"], "away": away["teamAbbr"],
+        "homeStarter": home["starter"], "awayStarter": away["starter"],
+        "batters": batters_out,
+    }
 
 
 # --------------------------------- daily walk ---------------------------------
@@ -285,24 +319,25 @@ def process_day(cache, date_str):
     any fold happens)."""
     game_pks = get_final_game_pks(date_str)
     if not game_pks:
-        return {"date": date_str, "league": league_rates([]), "batters": {}, "pitchers": {}}, True
+        return {"date": date_str, "league": league_rates([]), "batters": {},
+                "pitchers": {}, "games": []}, True
 
     boxes = []
     for pk in game_pks:
         try:
-            boxes.append(http_json(f"{STATS_API}/game/{pk}/boxscore"))
+            boxes.append((pk, http_json(f"{STATS_API}/game/{pk}/boxscore")))
         except Exception as e:
             print(f"WARN: boxscore fetch failed date={date_str} gamePk={pk} "
                   f"({type(e).__name__}) -- day incomplete, retrying whole date next run",
                   file=sys.stderr)
             return None, False
 
-    seen_batters, seen_pitchers = {}, {}
-    for box in boxes:
-        fold_boxscore(cache, box, seen_batters, seen_pitchers)
+    seen_batters, seen_pitchers, games = {}, {}, []
+    for pk, box in boxes:
+        games.append(fold_boxscore(cache, box, pk, seen_batters, seen_pitchers))
     league = league_rates(list(seen_batters.values()))
     return {"date": date_str, "league": league, "batters": seen_batters,
-            "pitchers": seen_pitchers}, True
+            "pitchers": seen_pitchers, "games": games}, True
 
 
 def update_cache(backfill_from=None, end_date=None, save_every=3):
