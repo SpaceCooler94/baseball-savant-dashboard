@@ -1,0 +1,56 @@
+name: Asof Rate Cache Backfill
+
+# Manual only, same as the zone_engine.py / pitch_shape_cache.py season
+# backfills -- this walks ~114 days x up to ~15 boxscore calls/day, real
+# work, not something that should ever fire on a schedule or a push.
+# Run it from the Actions tab (works fine from the GitHub mobile app):
+# Actions -> Asof Rate Cache Backfill -> Run workflow -> (defaults are
+# already the season opener through the live ledger's current start).
+on:
+  workflow_dispatch:
+    inputs:
+      start_date:
+        description: "Backfill from (season opener)"
+        default: "2026-03-26"
+        required: true
+      end_date:
+        description: "Backfill through"
+        default: "2026-07-18"
+        required: true
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    # Raised timeout, same reasoning as the other season backfills: this is
+    # ~114 days of schedule+boxscore calls, not a daily top-up. GitHub's own
+    # job ceiling is 6h (360min); 240 leaves headroom without risking a
+    # silent kill mid-run.
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run backfill
+        run: |
+          python asof_rate_cache.py \
+            --backfill "${{ github.event.inputs.start_date }}" \
+            --end "${{ github.event.inputs.end_date }}"
+
+      # Commits whatever got through even on a partial/interrupted run --
+      # asof_rate_cache.py's own stop-on-failure discipline means asOf and
+      # asof_rates/ are only ever in a fully-confirmed state, so a commit
+      # here is never a commit of partial/double-counted data. Re-running
+      # this workflow later resumes cleanly from the committed asOf cursor.
+      - name: Commit results
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add asof_rate_cache.json asof_rates/
+          git diff --staged --quiet || git commit -m "Asof rate cache backfill through ${{ github.event.inputs.end_date }}"
+          git push
