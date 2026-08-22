@@ -1,0 +1,46 @@
+name: Backtest k (log5 vs log5_dampened)
+
+# Manual only. Unlike the backfill, this makes ZERO network calls -- it's
+# pure computation over whatever's already committed in asof_rates/, so it
+# runs in seconds, not the better part of an hour. Run from the Actions tab:
+# Actions -> Backtest k -> Run workflow.
+#
+# The readable result is the "Run backtest" step's own log output (the same
+# per-market log-loss / d9 / d10 summary backtest_k.py already prints to
+# stdout) -- tap that step to read it, no file download needed. The full
+# decile-by-decile JSON also gets committed as backtest_k_report.json for
+# the record.
+on:
+  workflow_dispatch:
+    inputs:
+      k:
+        description: "Dampening exponent to test against the current formula"
+        default: "0.5"
+        required: true
+
+jobs:
+  backtest:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run backtest
+        run: python backtest_k.py --k "${{ github.event.inputs.k }}"
+
+      - name: Commit report
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add backtest_k_report.json
+          git diff --staged --quiet || git commit -m "Backtest k=${{ github.event.inputs.k }} report"
+          git push
