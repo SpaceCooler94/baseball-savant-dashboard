@@ -1,0 +1,67 @@
+name: Asof Rate Cache Backfill
+
+# Manual only, same as the zone_engine.py / pitch_shape_cache.py season
+# backfills -- this walks ~114 days x up to ~15 boxscore calls/day, real
+# work, not something that should ever fire on a schedule or a push.
+# Run it from the Actions tab (works fine from the GitHub mobile app):
+# Actions -> Asof Rate Cache Backfill -> Run workflow -> (defaults are
+# already the season opener through the live ledger's current start).
+on:
+  workflow_dispatch:
+    inputs:
+      start_date:
+        description: "Fresh backfill from this date (LEAVE BLANK to resume from the committed cache's cursor instead -- that's what extending forward wants)"
+        default: ""
+        required: false
+      end_date:
+        description: "Backfill through (leave blank for today)"
+        default: ""
+        required: false
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    # Explicit write grant -- without this, the default GITHUB_TOKEN in most
+    # repos is read-only and the final git push 403s after doing all the
+    # real work (confirmed: this is exactly what happened on the first run --
+    # 114 days of real API calls completed, then lost at the push step).
+    permissions:
+      contents: write
+    # Raised timeout, same reasoning as the other season backfills: this is
+    # ~114 days of schedule+boxscore calls, not a daily top-up. GitHub's own
+    # job ceiling is 6h (360min); 240 leaves headroom without risking a
+    # silent kill mid-run.
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run backfill
+        run: |
+          ARGS=""
+          if [ -n "${{ github.event.inputs.start_date }}" ]; then
+            ARGS="$ARGS --backfill ${{ github.event.inputs.start_date }}"
+          fi
+          if [ -n "${{ github.event.inputs.end_date }}" ]; then
+            ARGS="$ARGS --end ${{ github.event.inputs.end_date }}"
+          fi
+          python asof_rate_cache.py $ARGS
+
+      # Commits whatever got through even on a partial/interrupted run --
+      # asof_rate_cache.py's own stop-on-failure discipline means asOf and
+      # asof_rates/ are only ever in a fully-confirmed state, so a commit
+      # here is never a commit of partial/double-counted data. Re-running
+      # this workflow later resumes cleanly from the committed asOf cursor.
+      - name: Commit results
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add asof_rate_cache.json asof_rates/
+          git diff --staged --quiet || git commit -m "Asof rate cache backfill through ${{ github.event.inputs.end_date }}"
+          git push
