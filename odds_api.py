@@ -50,7 +50,24 @@ import unicodedata
 # HR-only: batter_hits_alternate dropped to cut per-event cost in half after
 # running out of credits on the free tier (500/mo) -- see header note above.
 MARKETS = "batter_home_runs_alternate"
-BOOKMAKERS = "draftkings,pinnacle,fanduel"
+# draftkings/fanduel: soft recreational books, the actual lines you'd bet.
+# pinnacle: the sharp benchmark the industry devigs against -- a genuinely
+# different comparison than two soft books, confirmed free-tier via the
+# official bookmaker list (region "eu", not "us" -- doesn't matter, the docs
+# confirm `bookmakers=` mixes keys across regions in one request). One real
+# caveat from that same page: "Odds are from public website which may incur
+# a delay" -- not guaranteed as real-time as DK/FD.
+# novig: a peer-to-peer exchange (region "us_ex", alongside Kalshi/
+# Polymarket), not a traditional bookmaker taking the other side -- near-zero
+# vig by construction, a second independent fair-price reference alongside
+# Pinnacle. Also confirmed free-tier.
+# Quota impact of both additions: zero. Region-equivalent cost is bookmaker-
+# COUNT based (every group of up to 10 = 1 region), and four bookmakers is
+# still comfortably inside the first region -- same 1 credit/event as before.
+# Bet365 deliberately NOT added: checked the official bookmaker list and it
+# doesn't cover MLB at any tier -- the only Bet365 listing anywhere is
+# bet365_au, scoped to AFL/NRL only, and paid-tier even for that.
+BOOKMAKERS = "draftkings,pinnacle,novig,fanduel"
 MARKET_TO_STAT = {
     "batter_home_runs_alternate": "hr",
 }
