@@ -50,7 +50,7 @@ import unicodedata
 # HR-only: batter_hits_alternate dropped to cut per-event cost in half after
 # running out of credits on the free tier (500/mo) -- see header note above.
 MARKETS = "batter_home_runs_alternate"
-BOOKMAKERS = "draftkings,fanduel"
+BOOKMAKERS = "draftkings,pinnacle,fanduel"
 MARKET_TO_STAT = {
     "batter_home_runs_alternate": "hr",
 }
