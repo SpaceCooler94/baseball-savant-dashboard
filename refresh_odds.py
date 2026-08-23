@@ -73,12 +73,24 @@ THRESHOLDS_K = (1, 2, 3)   # Over 0.5 / 1.5 / 2.5 -- what DK/FD actually post
 # bench/role players (Joe Mack +4500, Javier Sanoja +7500, Griffin Conine's
 # Over 1.5 at +40000, among others) all showing "edges" of 300-700%+ against
 # modelFair probabilities in the 10-23% range -- consistent, systematic, not
-# a one-off. Root cause (odds_api.py threshold-parsing bug vs. a genuine
-# DK/FD quirk for lower-profile players) is still unconfirmed as of this
-# fix, so this ceiling is a guard against BOTH possibilities, not a
-# diagnosis. Same numeric bound (1.0) is mirrored in MLB_Daily.js's
-# bestHrEdge() -- keep both in sync if this ever changes.
-EDGE_SANITY_CEILING = 1.0
+# a one-off. Ceiling tightened same day after a second, more damaging finding:
+# established everyday starters (Wyatt Langford +600, Jeremy Peña +750,
+# Mookie Betts +750, Jake McCarthy +690) ALSO clustered in a suspiciously
+# tight 51-61% edge band -- comfortably under the old 1.0 ceiling, so none of
+# these were caught. A same-slate control (Christian Walker, +500, 11% edge)
+# looked completely normal, confirming the cluster is a real distinct
+# population, not just noisy-but-legitimate variance. Checked parse_event_
+# odds()'s point-bucketing, milestone_threshold_to_k()'s math, and apply_
+# odds_to_row()'s point-to-k matching directly against this specific
+# hypothesis (a threshold mix-up, e.g. an Over-1.5 price landing in the
+# Over-0.5 bucket) -- all three are correct, ruling out this pipeline's own
+# code as the source. Root cause is therefore either The Odds API's upstream
+# DK data being stale/off for these specific mainline props, or a genuine
+# market quirk -- still unconfirmed without either more API credits or a
+# live DK/FD check, but no longer an open question about THIS code. Same
+# numeric bound is mirrored in MLB_Daily.js's bestHrEdge() -- keep both in
+# sync if this ever changes.
+EDGE_SANITY_CEILING = 0.35
 
 SESSION = requests.Session()
 SESSION.headers.update({"User-Agent": "mlb-daily-board-odds/1.0 (personal analytics pipeline)"})
