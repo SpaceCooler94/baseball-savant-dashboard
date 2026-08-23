@@ -66,6 +66,20 @@ BOARD_PATH = "daily_board.json"
 CAL_PATH = "calibration.json"
 THRESHOLDS_K = (1, 2, 3)   # Over 0.5 / 1.5 / 2.5 -- what DK/FD actually post
 
+# A real DK/FD mainline HR-alt price implying more than a 100% gap from the
+# model's own fair probability is far more likely to be a data problem than
+# a real market inefficiency -- liquid books essentially never misprice a
+# mainline single-game prop by multiples. Found 2026-08-22: five different
+# bench/role players (Joe Mack +4500, Javier Sanoja +7500, Griffin Conine's
+# Over 1.5 at +40000, among others) all showing "edges" of 300-700%+ against
+# modelFair probabilities in the 10-23% range -- consistent, systematic, not
+# a one-off. Root cause (odds_api.py threshold-parsing bug vs. a genuine
+# DK/FD quirk for lower-profile players) is still unconfirmed as of this
+# fix, so this ceiling is a guard against BOTH possibilities, not a
+# diagnosis. Same numeric bound (1.0) is mirrored in MLB_Daily.js's
+# bestHrEdge() -- keep both in sync if this ever changes.
+EDGE_SANITY_CEILING = 1.0
+
 SESSION = requests.Session()
 SESSION.headers.update({"User-Agent": "mlb-daily-board-odds/1.0 (personal analytics pipeline)"})
 
@@ -196,7 +210,11 @@ def apply_odds_to_row(row, odds_for_player, cal_by_stat):
                 # noise is signal. Scoped to point==0.5 only: settle.py grades
                 # gotHit/gotHR as at-least-one outcomes, so a k=2/k=3 edge has
                 # no corresponding settled result to check it against yet.
-                if (edge is not None and edge >= 0.08 and point == 0.5
+                # EDGE_SANITY_CEILING gate added after the 2026-08-22 finding
+                # above -- an edge this large is data-error-shaped, not
+                # signal-shaped; the raw number still lands in bookOdds either
+                # way (nothing is hidden), only the ledger angle is withheld.
+                if (edge is not None and edge >= 0.08 and edge < EDGE_SANITY_CEILING and point == 0.5
                         and row.get("confidence") == "high"
                         and not any("small sample" in str(x.get("label", "")).lower()
                                     for x in (row.get("hrRisks" if stat == "hr" else "hitRisks") or []))):
