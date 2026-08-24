@@ -1,0 +1,14 @@
+{
+  "appId": "com.savantdashboard.app",
+  "appName": "Baseball Savant Dashboard",
+  "webDir": "www",
+  "server": {
+    "url": "https://baseball-savant-dashboard.onrender.com",
+    "cleartext": false,
+    "androidScheme": "https"
+  },
+  "android": {
+    "allowMixedContent": false
+  },
+  "backgroundColor": "#0b1220"
+}
