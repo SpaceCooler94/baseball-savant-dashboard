@@ -152,6 +152,17 @@ def load_calibration_file():
     return data
 
 
+def _format_game_time(iso_str):
+    """'2026-08-23T17:35:00Z' -> '1:35 PM ET' for the browser dashboard."""
+    if not iso_str:
+        return "TBD"
+    try:
+        dt = datetime.datetime.fromisoformat(iso_str.replace("Z", "+00:00"))
+        return dt.astimezone(ET).strftime("%-I:%M %p ET")
+    except (ValueError, TypeError):
+        return "TBD"
+
+
 def load_daily_board():
     if not os.path.exists(DAILY_BOARD_PATH):
         return None
@@ -565,6 +576,49 @@ def api_daily_board():
                         "source": "github-actions log5 model" if board else "no board published yet"})
     except Exception as e:
         return fail("daily-board", e)
+
+
+@app.route("/api/hr-predictions")
+def hr_predictions():
+    """Home-run-probability-ranked view of today's daily board, for the browser
+    dashboard. daily_board.json/mlb_model already compute hrProb per hitter --
+    this just flattens today's games into one list sorted by it, since the raw
+    board (nested by game/side) only otherwise gets consumed by MLB_Daily.js."""
+    try:
+        board = get_cached("daily_board", load_daily_board, ttl=BOARD_CACHE_TTL)
+        if not board:
+            return jsonify({"status": "ok", "data": [],
+                            "source": "no board published yet"})
+        rows = []
+        for g in board.get("games", []):
+            game_time = _format_game_time(g.get("gameTime"))
+            sides = (
+                ("homeMatchups", g.get("awayProbable")),
+                ("awayMatchups", g.get("homeProbable")),
+            )
+            for side_key, opp_probable in sides:
+                opp_name = (opp_probable or {}).get("name") or "TBD"
+                opp_hand = (opp_probable or {}).get("hand")
+                opp = f"{opp_name} ({opp_hand})" if opp_hand else opp_name
+                for m in g.get(side_key, []):
+                    hr_prob = m.get("hrProb")
+                    if hr_prob is None:
+                        continue
+                    rows.append({
+                        "player": m.get("name"),
+                        "team": m.get("teamAbbr"),
+                        "opp": opp,
+                        "game_time": game_time,
+                        "hr_pct": round(hr_prob * 100, 1),
+                        "hr_tier": m.get("hrTier"),
+                        "hit_pct": round((m.get("hitProb") or 0) * 100, 1),
+                        "confidence": m.get("confidence"),
+                    })
+        rows.sort(key=lambda r: r["hr_pct"], reverse=True)
+        return jsonify({"status": "ok", "data": rows,
+                        "source": f"log5 model · built {board.get('builtAt')}"})
+    except Exception as e:
+        return fail("hr-predictions", e)
 
 
 @app.route("/api/health")

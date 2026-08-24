@@ -1,4 +1,10 @@
 const VIEWS = {
+  hr: {
+    endpoint: "/api/hr-predictions",
+    title: "Home Run Predictions -- Today's Slate",
+    headers: ["Player","Team","Opp SP","Game Time","HR%","Tier","Hit%","Confidence"],
+    keys: ["player","team","opp","game_time","hr_pct","hr_tier","hit_pct","confidence"],
+  },
   expected: {
     endpoint: "/api/expected-stats",
     title: "Expected Stats Leaderboard",
@@ -19,7 +25,7 @@ const VIEWS = {
   }
 };
 
-let currentView = "expected";
+let currentView = "hr";
 
 async function loadKPIs() {
   try {
@@ -54,12 +60,20 @@ async function loadTable(view) {
         `<tr><td colspan="${config.headers.length}" class="loading error">Error: ${json.message}</td></tr>`;
       return;
     }
+    if (!json.data.length) {
+      document.getElementById("tableBody").innerHTML =
+        `<tr><td colspan="${config.headers.length}" class="loading">${json.source || "No data available"}</td></tr>`;
+      return;
+    }
     document.getElementById("tableBody").innerHTML = json.data.map(row => {
       const cells = config.keys.map(k => {
         let val = row[k] ?? "—";
         if (k === "edge" && typeof val === "number") {
           const cls = val > 0 ? "up" : val < -0.01 ? "down" : "";
           return `<td class="${cls}">${val > 0 ? "+" : ""}${val}</td>`;
+        }
+        if ((k === "hr_pct" || k === "hit_pct") && typeof val === "number") {
+          return `<td>${val}%</td>`;
         }
         return `<td>${val}</td>`;
       }).join("");
