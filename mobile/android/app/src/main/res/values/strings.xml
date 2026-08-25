@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Baseball Savant Dashboard</string>
+    <string name="title_activity_main">Baseball Savant Dashboard</string>
+    <string name="package_name">com.savantdashboard.app</string>
+    <string name="custom_url_scheme">com.savantdashboard.app</string>
+</resources>

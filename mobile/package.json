@@ -1,0 +1,23 @@
+{
+  "name": "baseball-savant-dashboard-mobile",
+  "version": "1.0.0",
+  "description": "Capacitor mobile app wrapper for the Baseball Savant Dashboard",
+  "scripts": {
+    "sync": "cap sync",
+    "assets": "capacitor-assets generate --android --ios && cap sync",
+    "open:android": "cap open android",
+    "open:ios": "cap open ios"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@capacitor/android": "^8.5.0",
+    "@capacitor/core": "^8.5.0",
+    "@capacitor/ios": "^8.5.0"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^8.5.0"
+  }
+}
