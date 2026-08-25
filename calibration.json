@@ -1,140 +1,140 @@
 {
  "modelVersion": "log5-v5.4",
- "fitDate": "2026-08-24",
+ "fitDate": "2026-08-25",
  "reports": {
   "hit": {
-   "n": 8353,
-   "valLogLossRaw": 0.66569,
-   "valLogLossCal": 0.66147,
-   "trainScale": 0.4115,
-   "trainOffset": 0.2501,
+   "n": 8518,
+   "valLogLossRaw": 0.66183,
+   "valLogLossCal": 0.65848,
+   "trainScale": 0.4063,
+   "trainOffset": 0.2468,
    "verdict": "published"
   },
   "hr": {
-   "n": 8353,
-   "valLogLossRaw": 0.3404,
-   "valLogLossCal": 0.33957,
-   "trainScale": 0.8149,
-   "trainOffset": -0.4257,
+   "n": 8518,
+   "valLogLossRaw": 0.34282,
+   "valLogLossCal": 0.34207,
+   "trainScale": 0.7916,
+   "trainOffset": -0.4815,
    "verdict": "published"
   }
  },
  "hit": {
-  "scale": 0.4842,
-  "offset": 0.193,
-  "n": 8353,
-  "valLogLossRaw": 0.66569,
-  "valLogLossCal": 0.66147
+  "scale": 0.4931,
+  "offset": 0.1898,
+  "n": 8518,
+  "valLogLossRaw": 0.66183,
+  "valLogLossCal": 0.65848
  },
  "reliabilityHit": [
   {
-   "n": 835,
-   "meanPredicted": 0.551,
-   "observedRate": 0.5677
+   "n": 851,
+   "meanPredicted": 0.5511,
+   "observedRate": 0.5676
   },
   {
-   "n": 835,
-   "meanPredicted": 0.5908,
-   "observedRate": 0.6048
+   "n": 852,
+   "meanPredicted": 0.5909,
+   "observedRate": 0.6009
   },
   {
-   "n": 835,
-   "meanPredicted": 0.6117,
-   "observedRate": 0.6144
+   "n": 852,
+   "meanPredicted": 0.6119,
+   "observedRate": 0.615
   },
   {
-   "n": 836,
-   "meanPredicted": 0.6283,
-   "observedRate": 0.6029
+   "n": 852,
+   "meanPredicted": 0.6285,
+   "observedRate": 0.6056
   },
   {
-   "n": 835,
-   "meanPredicted": 0.6425,
-   "observedRate": 0.6132
+   "n": 852,
+   "meanPredicted": 0.6427,
+   "observedRate": 0.6162
   },
   {
-   "n": 835,
-   "meanPredicted": 0.6563,
-   "observedRate": 0.6263
+   "n": 851,
+   "meanPredicted": 0.6565,
+   "observedRate": 0.6287
   },
   {
-   "n": 836,
-   "meanPredicted": 0.6707,
-   "observedRate": 0.6352
+   "n": 852,
+   "meanPredicted": 0.6709,
+   "observedRate": 0.635
   },
   {
-   "n": 835,
-   "meanPredicted": 0.6863,
-   "observedRate": 0.6551
+   "n": 852,
+   "meanPredicted": 0.6866,
+   "observedRate": 0.6526
   },
   {
-   "n": 835,
-   "meanPredicted": 0.7072,
-   "observedRate": 0.6096
+   "n": 852,
+   "meanPredicted": 0.7076,
+   "observedRate": 0.6138
   },
   {
-   "n": 836,
-   "meanPredicted": 0.7468,
-   "observedRate": 0.6806
+   "n": 852,
+   "meanPredicted": 0.7471,
+   "observedRate": 0.6808
   }
  ],
  "hr": {
-  "scale": 0.8382,
-  "offset": -0.4028,
-  "n": 8353,
-  "valLogLossRaw": 0.3404,
-  "valLogLossCal": 0.33957
+  "scale": 0.8273,
+  "offset": -0.4279,
+  "n": 8518,
+  "valLogLossRaw": 0.34282,
+  "valLogLossCal": 0.34207
  },
  "reliabilityHr": [
   {
-   "n": 835,
-   "meanPredicted": 0.0648,
-   "observedRate": 0.0731
+   "n": 851,
+   "meanPredicted": 0.0646,
+   "observedRate": 0.0717
   },
   {
-   "n": 835,
+   "n": 852,
    "meanPredicted": 0.0825,
-   "observedRate": 0.0635
+   "observedRate": 0.0634
   },
   {
-   "n": 835,
+   "n": 852,
    "meanPredicted": 0.0931,
-   "observedRate": 0.085
+   "observedRate": 0.0857
   },
   {
-   "n": 836,
+   "n": 852,
    "meanPredicted": 0.102,
-   "observedRate": 0.1089
+   "observedRate": 0.108
   },
   {
-   "n": 835,
+   "n": 852,
    "meanPredicted": 0.1112,
-   "observedRate": 0.1102
+   "observedRate": 0.1092
   },
   {
-   "n": 835,
-   "meanPredicted": 0.1209,
+   "n": 851,
+   "meanPredicted": 0.121,
    "observedRate": 0.1246
   },
   {
-   "n": 836,
-   "meanPredicted": 0.1316,
+   "n": 852,
+   "meanPredicted": 0.1318,
    "observedRate": 0.1268
   },
   {
-   "n": 835,
-   "meanPredicted": 0.1444,
-   "observedRate": 0.1222
+   "n": 852,
+   "meanPredicted": 0.1446,
+   "observedRate": 0.1244
   },
   {
-   "n": 835,
-   "meanPredicted": 0.163,
-   "observedRate": 0.1389
+   "n": 852,
+   "meanPredicted": 0.1633,
+   "observedRate": 0.1397
   },
   {
-   "n": 836,
-   "meanPredicted": 0.2069,
-   "observedRate": 0.1746
+   "n": 852,
+   "meanPredicted": 0.2075,
+   "observedRate": 0.1714
   }
  ]
 }
