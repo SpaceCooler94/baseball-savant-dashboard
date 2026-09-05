@@ -1,49 +1,38 @@
 #!/usr/bin/env python3
 # ============================================================================
-# refresh_odds.py -- pulls real DraftKings/FanDuel milestone (Over 0.5/1.5/
-# 2.5) prices for HR props from The Odds API, joins them to today's board by
-# player name, and patches in the actual, correctly-computed edge:
+# refresh_odds.py -- pulls real HR milestone prices from SportsGameOdds and
+# patches today's board with row["bookOdds"]["hr"][point]["books"][book] =
+# {overPrice, edge}. Same output shape the frontend (MLB_Daily.js) already
+# expects and was fixed this session to handle correctly -- any threshold,
+# any book, not a fixed 0.5/four-book assumption.
 #
-#   edge = model_probability * book_decimal_odds - 1
-#
-# using this pipeline's own calibrated milestone_prob() (mlb_model.py) priced
-# at the SAME threshold the book is offering -- not just the Over 0.5 number
-# the board already had. Also computes the book's OWN no-vig fair price
-# (devig_two_way) so "do we agree on the true rate" and "is this bet
-# profitable at the price offered" are two separate, clearly labeled numbers,
-# never conflated into one.
-#
-# HR-ONLY as of the credit crunch: batter_hits_alternate dropped from
-# odds_api.MARKETS after running out of credits on the free tier (500/mo).
-# apply_odds_to_row()'s stat loop is unchanged and already generic --
-# "hit" simply never has odds to attach now, so it's skipped every time,
-# no crash, no special-casing needed. Re-add "hit" to MARKET_TO_STAT in
-# odds_api.py to bring hits back; nothing in this file needs to change.
-#
-# Same safety discipline as refresh_lineups.py: atomic write, refuses to
-# patch a board that isn't today's, retries with backoff on 429 (this
-# matters more here than for StatsAPI -- The Odds API explicitly rate-limits
-# bursts), and reports quota usage every run so cost stays visible.
-#
-# OPERATIONAL COST (read the docs before changing MARKETS/BOOKMAKERS in
-# odds_api.py -- this math changes if you do):
-#   1 market (batter_home_runs_alternate, HR-only)
-#   x 1 region-equivalent (2 named bookmakers, and the docs price every group
-#     of <=10 named bookmakers as ONE region)
-#   = 1 credit PER EVENT, charged only for markets actually present in the
-#     response (empty markets/events are free). Was 2 credits/event with
-#     hits included -- this halves every number below.
-#   A 15-game slate is therefore ~15 credits per full run. Three runs/day
-#   (paired with the existing lineup-refresh cadence) = ~45 credits/day,
-#   ~1,350/month. Still comfortably inside a $20-30/mo paid tier; on the
-#   FREE tier (500 credits/mo) this now covers roughly 11 full slate-days a
-#   month at 3 runs/day, or about 33 days at 1 run/day -- up from running dry
-#   in under a week at the old 2-market rate. Each run's actual cost is
-#   printed from the x-requests-* response headers rather than estimated.
+# STRUCTURAL CHANGE FROM THE PRIOR (The Odds API) INTEGRATION, confirmed
+# against real, live, authenticated data before writing any of this:
+#   - ONE call for the whole slate, not one per event. SportsGameOdds
+#     charges per event returned, not per market+bookmaker, so a single
+#     /v2/events?leagueID=MLB&oddIDs=...&limit=N pull with a high enough
+#     limit returns every game AND every player's odds embedded in one
+#     response. Confirmed on a real pull: 1 event, 1186 odds entries,
+#     genuinely 1 object cost.
+#   - No fixed threshold. Each bookmaker quotes its own "main" HR line
+#     independently (real example: DraftKings/Pinnacle at Over 0.5,
+#     FanDuel/BetMGM at Over 1.5, ESPN Bet/Hard Rock at Over 2.5, same
+#     player, same moment) -- apply_odds_to_row() below prices the
+#     model's probability at EACH book's own actual threshold, not a
+#     single assumed one.
+#   - `available` matters. A real pull showed only ~38.5% of returned
+#     bookmaker quotes marked available=true -- the rest are stale/closed
+#     lines still present in the response. odds_api.parse_event_odds()
+#     already filters to available=true only; nothing here needs to
+#     re-check that, but it's why row-level coverage will look thinner
+#     than the raw number of bookmakers in a response might suggest, and
+#     that's correct behavior, not a bug to chase.
+#   - Player identity has no crosswalk to MLBAM hitterId -- joins are by
+#     normalized name (see odds_api.norm_name()), same discipline as
+#     every other cross-source join in this pipeline.
 #
 # Usage: python refresh_odds.py [path/to/daily_board.json]
-# Requires env var ODDS_API_KEY. Exits 0 (not an error) when no odds are
-# posted yet for a game -- normal well before lineups are out.
+# Requires env var SPORTSGAMEODDS_API_KEY.
 # ============================================================================
 
 import datetime
@@ -60,57 +49,27 @@ import mlb_model as M
 import odds_api as O
 
 ET = ZoneInfo("America/New_York")
-ODDS_API = "https://api.the-odds-api.com/v4"
-SPORT = "baseball_mlb"
 BOARD_PATH = "daily_board.json"
 CAL_PATH = "calibration.json"
-THRESHOLDS_K = (1, 2, 3)   # Over 0.5 / 1.5 / 2.5 -- what DK/FD actually post
-
-# A real DK/FD mainline HR-alt price implying more than a 100% gap from the
-# model's own fair probability is far more likely to be a data problem than
-# a real market inefficiency -- liquid books essentially never misprice a
-# mainline single-game prop by multiples. Found 2026-08-22: five different
-# bench/role players (Joe Mack +4500, Javier Sanoja +7500, Griffin Conine's
-# Over 1.5 at +40000, among others) all showing "edges" of 300-700%+ against
-# modelFair probabilities in the 10-23% range -- consistent, systematic, not
-# a one-off. Ceiling tightened same day after a second, more damaging finding:
-# established everyday starters (Wyatt Langford +600, Jeremy Peña +750,
-# Mookie Betts +750, Jake McCarthy +690) ALSO clustered in a suspiciously
-# tight 51-61% edge band -- comfortably under the old 1.0 ceiling, so none of
-# these were caught. A same-slate control (Christian Walker, +500, 11% edge)
-# looked completely normal, confirming the cluster is a real distinct
-# population, not just noisy-but-legitimate variance. Checked parse_event_
-# odds()'s point-bucketing, milestone_threshold_to_k()'s math, and apply_
-# odds_to_row()'s point-to-k matching directly against this specific
-# hypothesis (a threshold mix-up, e.g. an Over-1.5 price landing in the
-# Over-0.5 bucket) -- all three are correct, ruling out this pipeline's own
-# code as the source. Root cause is therefore either The Odds API's upstream
-# DK data being stale/off for these specific mainline props, or a genuine
-# market quirk -- still unconfirmed without either more API credits or a
-# live DK/FD check, but no longer an open question about THIS code. Same
-# numeric bound is mirrored in MLB_Daily.js's bestHrEdge() -- keep both in
-# sync if this ever changes.
-EDGE_SANITY_CEILING = 0.35
+THRESHOLDS_K = (1, 2, 3)   # Over 0.5 / 1.5 / 2.5 -- what real books actually post
+EDGE_SANITY_CEILING = 0.35  # see MLB_Daily.js / prior refresh_odds.py for the
+                             # real, live-data reasoning behind this number
 
 SESSION = requests.Session()
-SESSION.headers.update({"User-Agent": "mlb-daily-board-odds/1.0 (personal analytics pipeline)"})
+SESSION.headers.update({"User-Agent": "mlb-daily-board-odds/2.0 (personal analytics pipeline)"})
 
 
 def http_json(url, params, tries=4):
-    """Same retry shape as build_daily_board.py/refresh_lineups.py's
-    http_json, tuned for The Odds API's documented rate limiting (429 on
-    bursts) rather than StatsAPI's -- slightly longer backoff, since this
-    module is explicitly warned about bursts in the docs, StatsAPI isn't."""
     last = None
     for attempt in range(tries):
         try:
-            r = SESSION.get(url, params=params, timeout=20)
+            r = SESSION.get(url, params=params, timeout=25)
             if r.status_code == 429:
                 time.sleep(min(3.0 * (attempt + 1), 15))
                 last = requests.HTTPError("429 rate limited")
                 continue
             r.raise_for_status()
-            return r.json(), r.headers
+            return r.json()
         except requests.HTTPError as e:
             last = e
             if attempt < tries - 1:
@@ -130,126 +89,90 @@ def _nv(v):
         return None
 
 
-def fetch_events(api_key):
-    """Free endpoint -- does not count against quota. Returns today's/live
-    MLB events with id, home_team, away_team, commence_time."""
-    data, _ = http_json(f"{ODDS_API}/sports/{SPORT}/events", {"apiKey": api_key})
-    return data if isinstance(data, list) else []
+def fetch_slate_odds(api_key, limit=30):
+    """One call, whole slate. limit=30 comfortably covers even a full
+    15-game MLB night (each game is 1 event) with room to spare."""
+    params = {
+        "apiKey": api_key,
+        "leagueID": "MLB",
+        "oddsAvailable": "true",
+        "oddIDs": O.ODD_IDS,
+        "limit": limit,
+    }
+    data = http_json(O.BASE_URL, params)
+    if not data.get("success"):
+        raise RuntimeError(f"SportsGameOdds returned success=false: {data.get('error')}")
+    return data.get("data") or []
 
 
 def match_event_to_game(event, board_games):
-    """Team-name match, not ID match -- The Odds API and StatsAPI don't share
-    event identifiers. Full team names on both sides make this a plain exact
-    match in the normal case; falls back to substring match for the rare
-    naming mismatch (e.g. 'Athletics' vs a market-specific alt name)."""
-    home, away = event.get("home_team", ""), event.get("away_team", "")
+    """Team-name match -- SportsGameOdds' eventID has no relationship to
+    MLB Stats API's gamePk. Uses the short team name (e.g. 'NYM') which
+    this pipeline's board rows already carry as teamAbbr."""
+    teams = event.get("teams") or {}
+    home = ((teams.get("home") or {}).get("names") or {}).get("short", "")
+    away = ((teams.get("away") or {}).get("names") or {}).get("short", "")
     for g in board_games:
-        gh = (g.get("homeTeam") or {}).get("name") or (g.get("homeTeam") or {}).get("abbr", "")
-        ga = (g.get("awayTeam") or {}).get("name") or (g.get("awayTeam") or {}).get("abbr", "")
-        if (home and (home == gh or home in gh or gh in home)) and \
-           (away and (away == ga or away in ga or ga in away)):
+        gh = (g.get("homeTeam") or {}).get("abbr", "")
+        ga = (g.get("awayTeam") or {}).get("abbr", "")
+        if home == gh and away == ga:
             return g
     return None
 
 
-def fetch_event_odds(api_key, event_id):
-    """The one paid call, one event at a time -- see module docstring for the
-    exact quota math. Returns (parsed_dict, headers) so the caller can log
-    x-requests-remaining without a second request."""
-    params = {
-        "apiKey": api_key,
-        "bookmakers": O.BOOKMAKERS,
-        "markets": O.MARKETS,
-        "oddsFormat": "american",
-    }
-    data, headers = http_json(f"{ODDS_API}/sports/{SPORT}/events/{event_id}/odds", params)
-    return O.parse_event_odds(data or {}), headers
+def apply_odds_to_row(row, odds_for_player, cal_hr):
+    """Patches row["bookOdds"]["hr"][point] = {point, modelRaw, modelFair,
+    books: {book: {overPrice, underPrice, edge}}}. odds_for_player is
+    {point: {book: {"over": price, "under": price}}} from
+    odds_api.parse_event_odds() -- already keyed by each book's own real
+    threshold, so this function pricing the model at THAT threshold (not
+    a fixed one) is the whole point of this rewrite, not an afterthought.
 
-
-def apply_odds_to_row(row, odds_for_player, cal_by_stat):
-    """Patches row["bookOdds"] = {"hr": {...}} (HR-only for now, see module
-    docstring) with, per threshold actually offered by DK/FD: the model's
-    calibrated price at that SAME threshold (via mlb_model.milestone_prob,
-    not just the board's existing Over-0.5 number), the book's own devigged
-    fair price, and the real edge at each book.
-
-    cal_by_stat: {"hr": cal_block_or_None, "hit": cal_block_or_None} -- HR and
-    Hit calibrate independently (different scale/offset in calibration.json),
-    so this takes both rather than one shared block; passing the wrong one to
-    the wrong stat would silently mis-price every HR-side edge. Still keyed
-    by both stats even though only "hr" has odds right now -- the loop below
-    is unchanged and generic, so re-enabling "hit" in odds_api.py needs no
-    edit here.
-
-    Returns True if anything was written."""
+    Ledger-stamps a book_edge_* angle under the same quality bar as
+    before (HIGH confidence, no small-sample flag, point==0.5 only since
+    settle.py only grades at-least-one-HR outcomes) so measure_signals.py
+    keeps working unchanged on the new data source."""
+    if not odds_for_player:
+        return False
+    inputs = row.get("hrInputs") or {}
+    raw_per_pa = _nv(inputs.get("rawPerPA"))
+    n = _nv(row.get("expectedPA"))
+    if raw_per_pa is None or n is None:
+        return False
     wrote = False
-    for stat in ("hr", "hit"):
-        by_point = (odds_for_player or {}).get(stat)
-        if not by_point:
+    stat_out = {}
+    for point, books in odds_for_player.items():
+        k = O.milestone_threshold_to_k(point)
+        if k is None or k not in THRESHOLDS_K:
             continue
-        inputs = row.get("hrInputs" if stat == "hr" else "hitInputs") or {}
-        raw_per_pa = _nv(inputs.get("rawPerPA"))
-        n = _nv(row.get("expectedPA"))
-        if raw_per_pa is None or n is None:
-            continue
-        cal_block = (cal_by_stat or {}).get(stat)
-        stat_out = {}
-        for point, books in by_point.items():
-            k = O.milestone_threshold_to_k(point)
-            if k is None or k not in THRESHOLDS_K:
-                continue
-            raw_p, cal_p = M.milestone_prob(raw_per_pa, n, k, cal_block)
-            entry = {"point": point, "modelRaw": raw_p, "modelFair": cal_p, "books": {}}
-            for book_key, prices in books.items():
-                over, under = prices.get("over"), prices.get("under")
-                book_fair_over, _ = O.devig_two_way(over, under)
-                edge = O.compute_edge(cal_p, over) if over is not None else None
-                entry["books"][book_key] = {
-                    "overPrice": over, "underPrice": under,
-                    "bookFairProb": book_fair_over,
-                    "edge": edge,
-                }
-                wrote = True
-                # Ledger-stamp real edges as an angle, the same generic
-                # mechanism every other reference signal already rides (no new
-                # settle.py code needed -- it already captures every key in
-                # row["angles"]). Gated on the SAME quality bar the client
-                # applies: HIGH confidence, no small-sample risk flag. A
-                # 2026-08-13 board found the biggest "edges" were almost all
-                # low-confidence/thin-sample players whose calibrated
-                # probability was itself untrustworthy -- stamping those into
-                # the ledger unfiltered would teach a future measurement that
-                # noise is signal. Scoped to point==0.5 only: settle.py grades
-                # gotHit/gotHR as at-least-one outcomes, so a k=2/k=3 edge has
-                # no corresponding settled result to check it against yet.
-                # EDGE_SANITY_CEILING gate added after the 2026-08-22 finding
-                # above -- an edge this large is data-error-shaped, not
-                # signal-shaped; the raw number still lands in bookOdds either
-                # way (nothing is hidden), only the ledger angle is withheld.
-                if (edge is not None and edge >= 0.08 and edge < EDGE_SANITY_CEILING and point == 0.5
-                        and row.get("confidence") == "high"
-                        and not any("small sample" in str(x.get("label", "")).lower()
-                                    for x in (row.get("hrRisks" if stat == "hr" else "hitRisks") or []))):
-                    row.setdefault("angles", []).append({
-                        "key": f"book_edge_{book_key}",
-                        "label": f"{'HR' if stat=='hr' else 'Hit'} edge vs {book_key}: "
-                                 f"model {cal_p*100:.1f}% vs {'+' if over>0 else ''}{over:.0f} "
-                                 f"({edge*100:+.1f}%)",
-                        "cls": "green",
-                    })
-            stat_out[str(point)] = entry
-        if stat_out:
-            row.setdefault("bookOdds", {})[stat] = stat_out
+        raw_p, cal_p = M.milestone_prob(raw_per_pa, n, k, cal_hr)
+        entry = {"point": point, "modelRaw": raw_p, "modelFair": cal_p, "books": {}}
+        for book_key, prices in books.items():
+            over, under = prices.get("over"), prices.get("under")
+            book_fair_over, _ = O.devig_two_way(over, under) if under is not None else (None, None)
+            edge = O.compute_edge(cal_p, over) if over is not None else None
+            entry["books"][book_key] = {
+                "overPrice": over, "underPrice": under,
+                "bookFairProb": book_fair_over, "edge": edge,
+            }
+            wrote = True
+            if (edge is not None and 0.08 <= edge < EDGE_SANITY_CEILING and point == 0.5
+                    and row.get("confidence") == "high"
+                    and not any("small sample" in str(x.get("label", "")).lower()
+                                for x in (row.get("hrRisks") or []))):
+                row.setdefault("angles", []).append({
+                    "key": f"book_edge_{book_key}",
+                    "label": f"HR edge vs {book_key}: model {cal_p*100:.1f}% vs "
+                             f"{'+' if over>0 else ''}{over:.0f} ({edge*100:+.1f}%)",
+                    "cls": "green",
+                })
+        stat_out[str(point)] = entry
+    if stat_out:
+        row.setdefault("bookOdds", {})["hr"] = stat_out
     return wrote
 
 
 def archive_board(board, today):
-    """Same fix as refresh_lineups.py's archive_board() -- see its docstring
-    for the full reasoning. For odds specifically this closes an even bigger
-    gap: without it, bookOdds/edge data NEVER reaches anything settle.py
-    reads, since it only ever lands in the live daily_board.json, which the
-    archive was frozen before this script ever runs. There would be no way,
-    ever, to check historically whether an edge was real."""
     try:
         os.makedirs("boards", exist_ok=True)
         atomic_write_json(os.path.join("boards", f"{today}.json"), board)
@@ -274,9 +197,9 @@ def atomic_write_json(path, obj):
 
 
 def main():
-    api_key = os.environ.get("ODDS_API_KEY")
+    api_key = os.environ.get("SPORTSGAMEODDS_API_KEY")
     if not api_key:
-        print("ODDS_API_KEY not set -- skipping odds refresh", file=sys.stderr)
+        print("SPORTSGAMEODDS_API_KEY not set -- skipping odds refresh", file=sys.stderr)
         return
 
     path = sys.argv[1] if len(sys.argv) > 1 else BOARD_PATH
@@ -291,55 +214,45 @@ def main():
         print(f"Board is for {board.get('builtAt')}, today is {today} -- refusing to patch a stale board")
         return
 
-    cal_hit, cal_hr = None, None
+    cal_hr = None
     try:
         with open(CAL_PATH) as f:
             cal = json.load(f)
         if isinstance(cal, dict) and cal.get("modelVersion") == M.MODEL_VERSION:
-            cal_hit, cal_hr = cal.get("hit"), cal.get("hr")
+            cal_hr = cal.get("hr")
     except (FileNotFoundError, json.JSONDecodeError):
         pass
-    cal_by_stat = {"hr": cal_hr, "hit": cal_hit}
 
-    events = fetch_events(api_key)
+    try:
+        events = fetch_slate_odds(api_key)
+    except Exception as e:
+        print(f"  odds fetch failed: {type(e).__name__}: {e}", file=sys.stderr)
+        return
     if not events:
-        print("No MLB events returned -- nothing to patch (normal in the off-season or very early morning)")
+        print("No MLB events returned -- nothing to patch")
         return
 
-    by_pid = {}
+    by_norm_name = {}
     for g in board.get("games", []):
         for side in ("homeMatchups", "awayMatchups"):
             for row in (g.get(side) or []):
-                by_pid.setdefault(O.norm_name(row.get("name")), []).append(row)
+                by_norm_name.setdefault(O.norm_name(row.get("name")), []).append(row)
 
     events_matched = 0
     rows_patched = 0
-    last_headers = {}
     for ev in events:
         game = match_event_to_game(ev, board.get("games", []))
         if not game:
             continue
-        try:
-            parsed, headers = fetch_event_odds(api_key, ev["id"])
-        except Exception as e:
-            print(f"  odds fetch failed for {ev.get('away_team')} @ {ev.get('home_team')}: "
-                  f"{type(e).__name__}: {e}", file=sys.stderr)
-            continue
-        last_headers = headers
+        parsed = O.parse_event_odds(ev)
         events_matched += 1
-        all_players = set()
-        for stat in ("hr", "hit"):
-            all_players |= set((parsed.get(stat) or {}).keys())
-        for player_norm in all_players:
-            rows = by_pid.get(player_norm)
+        for player_norm, odds_for_player in parsed.items():
+            rows = by_norm_name.get(player_norm)
             if not rows:
                 continue
-            odds_for_player = {stat: (parsed.get(stat) or {}).get(player_norm)
-                                for stat in ("hr", "hit")}
             for row in rows:
-                if apply_odds_to_row(row, odds_for_player, cal_by_stat):
+                if apply_odds_to_row(row, odds_for_player, cal_hr):
                     rows_patched += 1
-        time.sleep(1.0)  # spacing between per-event calls, per the docs' 429 guidance
 
     if events_matched == 0:
         print("Matched 0 events to tonight's board -- team-name matching may need a look")
@@ -347,12 +260,10 @@ def main():
 
     board["oddsRefreshedAt"] = datetime.datetime.now(ET).isoformat(timespec="minutes")
     board["oddsEventsMatched"] = events_matched
+    board["oddsProvider"] = "sportsgameodds"
     atomic_write_json(path, board)
     archive_board(board, today)
-    remaining = last_headers.get("x-requests-remaining", "?")
-    used_last = last_headers.get("x-requests-last", "?")
-    print(f"Odds patched: {events_matched} events matched, {rows_patched} player-rows updated. "
-          f"Quota remaining: {remaining} (last call cost {used_last})")
+    print(f"Odds patched: {events_matched} events matched, {rows_patched} player-rows updated.")
 
 
 if __name__ == "__main__":
