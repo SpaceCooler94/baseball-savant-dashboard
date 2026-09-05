@@ -1,22 +1,39 @@
 # .github/workflows/odds_refresh.yml
 #
-# Pulls real DraftKings/FanDuel milestone prices (HR and Hits, Over 0.5/1.5/
-# 2.5) and patches the board with model-fair-vs-book-price and the actual
-# computed edge at each book. See refresh_odds.py's header for the exact
-# quota math this schedule assumes -- change the cron count and re-check that
-# math together, they're not independent.
+# Pulls real HR milestone prices (Over 0.5/1.5/2.5, whatever each book is
+# actually quoting -- see odds_api.py's header for why there's no fixed
+# threshold anymore) from SportsGameOdds and patches the board with
+# model-fair-vs-book-price and the actual computed edge at each book,
+# across whichever of the real ~20 US-relevant bookmakers this feed
+# returns for a given player, not just two named books.
 #
-# COST AT THIS SCHEDULE: 2 credits/event x ~15 events x 3 runs/day
-#   = ~90 credits/day, ~2,700/month. Comfortably inside the lowest paid tier
-#   of The Odds API as of this writing -- confirm against your actual plan
-#   before widening the schedule, since this number scales linearly with runs.
+# PROVIDER CHANGE FROM THE ODDS API, confirmed against real, live,
+# authenticated data before this was rewritten (not assumed): SportsGameOdds
+# charges per EVENT returned, not per market+bookmaker, and one call with a
+# high enough `limit` returns every game on the slate already embedded --
+# see refresh_odds.py's fetch_slate_odds(). That changes the shape of this
+# workflow's own cost math completely, not just the secret name.
+#
+# COST AT THIS SCHEDULE: ~15 events/night x 3 runs/day = ~45 objects/day,
+# ~1,350/month. That's roughly 1/60th of what the old per-event-per-market
+# DK/FD-only integration cost under The Odds API for LESS coverage (2
+# bookmakers vs ~20+ real ones now returned per call). Comfortably inside
+# even SportsGameOdds' free tier (2,500 objects/month) on call volume alone
+# -- but free tier only returns 9 bookmakers and does NOT include Pinnacle,
+# Circa, or the exchange books (Novig/Prophet Exchange/Betfair Exchange/
+# Matchbook) the sharp-vs-soft comparison depends on. Those require the
+# Pro plan. Confirm which plan is actually active before assuming the sharp
+# side of that comparison will populate -- this schedule works on either
+# tier, but what comes back differs a lot by tier, not by this workflow.
 #
 # Paired with the SAME three windows as lineup-refresh (11am/4:30pm/7:30pm
-# ET) deliberately: odds are most useful once real lineups are known (the
-# model's price at a given threshold depends on expectedPA, which lineup-
-# refresh already updates first in the same window), and reusing the
-# existing cadence avoids adding a fourth uncoordinated schedule that could
-# race the other two.
+# ET) deliberately, same reasoning as before the provider swap: odds are
+# most useful once real lineups are known (the model's price at a given
+# threshold depends on expectedPA, which lineup-refresh already updates
+# first in the same window), and reusing the existing cadence avoids a
+# fourth uncoordinated schedule that could race the other two. Nothing
+# about the provider change affects this timing logic -- only the fetch
+# mechanics inside refresh_odds.py changed.
 
 name: odds-refresh
 
@@ -50,9 +67,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Patch DK/FD odds + edge
+      - name: Patch HR odds + edge (SportsGameOdds)
         env:
-          ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
+          SPORTSGAMEODDS_API_KEY: ${{ secrets.SPORTSGAMEODDS_API_KEY }}
         run: python refresh_odds.py
 
       - name: Commit board
