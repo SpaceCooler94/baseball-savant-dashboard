@@ -1,76 +1,78 @@
 #!/usr/bin/env python3
 # ============================================================================
-# odds_api.py -- The Odds API (api.the-odds-api.com), MLB milestone player
-# props, DraftKings + FanDuel. Documentation read directly before writing any
-# of this (the-odds-api.com/liveapi/guides/v4 and .../betting-markets.html),
-# not from memory -- market keys, response schema, and quota mechanics below
-# are all confirmed against the current docs, not guessed.
+# odds_api.py -- SportsGameOdds (api.sportsgameodds.com/v2), MLB HR player
+# props. Replaces the earlier The Odds API integration entirely, after a
+# real, live-verified structural difference made continuing untenable at
+# the free tier: The Odds API charges per market+bookmaker (the whole
+# reason Pinnacle/Novig additions had to be weighed against a 10-bookmaker
+# region cap), while SportsGameOdds charges per EVENT regardless of how
+# many bookmakers or markets come back in it -- confirmed directly from
+# their pricing page, not a guess.
 #
-# CONFIRMED FACTS THIS MODULE DEPENDS ON:
-#  - Player props require ONE event at a time:
-#    GET /v4/sports/baseball_mlb/events/{eventId}/odds
-#        ?apiKey=...&bookmakers=draftkings,fanduel
-#        &markets=batter_home_runs_alternate
-#        &oddsFormat=american
-#  - Milestone (X+) markets use the _alternate market keys. Exact MLB key
-#    in use, from the betting-markets reference page:
-#      batter_home_runs_alternate  -- Alternate batter home runs (Over/Under)
-#    Returns MULTIPLE point thresholds (0.5, 1.5, 2.5, ...) as separate
-#    Over/Under outcome pairs per player, all inside one market's outcomes
-#    list -- not one call per threshold.
-#    HR-only as of the credit crunch below -- batter_hits_alternate dropped
-#    to halve per-event cost. Re-add to MARKETS (and MARKET_TO_STAT) if the
-#    quota situation changes; parse_event_odds()/apply_odds_to_row() already
-#    handle "hit" generically and need no other change to bring it back.
-#  - Quota cost = [unique markets in the response] x [region-equivalent].
-#    Specifying bookmakers=draftkings,fanduel (2 books) is charged as ONE
-#    region (every group of <=10 named bookmakers = 1 region-equivalent), so
-#    asking for exactly these two books costs the SAME as asking for one.
-#    1 market x 1 region-equivalent = 1 credit per event now that hits is
-#    dropped (was 2 credits/event with both markets) -- see refresh_odds.py
-#    for the updated operational math this changes.
-#  - Response schema (event-odds endpoint specifically): outcomes carry BOTH
-#    "name" (Over/Under) and "description" (the player's name) -- description
-#    only appears on markets that are player-scoped, confirmed in the docs'
-#    own player-prop example. "point" is the threshold (0.5, 1.5, ...).
-#    "last_update" sits on the MARKET, not the bookmaker, for this endpoint
-#    (different from the plain /odds endpoint) -- not used here, but a real
-#    difference worth knowing if this module is ever extended.
-#  - Odds requested in American format directly (oddsFormat=american) rather
-#    than requesting decimal and converting, because the docs explicitly warn
-#    decimal-to-American conversion can introduce small rounding
-#    discrepancies for some bookmakers. American-to-decimal (the direction
-#    this module actually needs, for EV math) is exact, ordinary arithmetic,
-#    not subject to that warning.
+# CONFIRMED FACTS THIS MODULE DEPENDS ON (verified against a real, live,
+# authenticated /v2/events pull on 2026-09-05, not docs alone -- docs and
+# a live response disagreed on the one detail that mattered most, see
+# below, so nothing here is trusted without having seen it in real data):
+#
+#  - Auth: X-API-Key header OR apiKey query param, either works.
+#  - Endpoint: GET https://api.sportsgameodds.com/v2/events
+#      ?leagueID=MLB&oddsAvailable=true&oddIDs=<comma list>&limit=N
+#    Unlike The Odds API's one-call-per-event pattern, ONE call with a
+#    high enough limit returns every game on the slate, each with its own
+#    full odds set already embedded -- confirmed on a real 15-game-shaped
+#    pull. This is a real, structural cost reduction, not just a nicer API.
+#  - oddID format: {statID}-{statEntityID}-{periodID}-{betTypeID}-{sideID}.
+#    HR market statID is "batting_homeRuns" (confirmed present in a real
+#    response; the docs' own worked examples only ever showed
+#    batting_hits/batting_singles, so this was verified against live data,
+#    not assumed from the pattern). Use statEntityID="PLAYER_ID" as a
+#    literal wildcard meaning "any player" -- confirmed to work, returns
+#    every player's line, not a request for a player literally named that.
+#  - Real oddID betType/side pairs seen for HR: "-ou-over" / "-ou-under"
+#    (the one this module uses) and "-yn-yes" / "-yn-no" (a Yes/No framing
+#    of the exact same market -- mathematically redundant with the 0.5
+#    Over/Under line, not separately fetched).
+#  - THE ONE THING THAT ACTUALLY CHANGES THE PARSING MODEL: there is no
+#    fixed threshold. The docs' passing-yards example suggested one
+#    canonical line per market; live HR data shows every bookmaker
+#    reporting its OWN "overUnder" value independently under the exact
+#    same oddID -- confirmed on a real pull where, for one active power
+#    hitter, DraftKings and Pinnacle were quoting Over 0.5 while FanDuel
+#    and BetMGM were quoting Over 1.5 and ESPN Bet / Hard Rock were
+#    quoting Over 2.5, all at the same moment, same oddID. A book can and
+#    does feature a different HR line depending on the hitter. This means
+#    "DK's price at the 0.5 threshold" isn't a safe query -- the correct
+#    read is "whatever threshold DK is actually quoting today," which is
+#    what parse_event_odds() below does: it buckets each bookmaker under
+#    ITS OWN reported point value, not a single assumed one.
+#  - Player identity: SportsGameOdds' own playerID scheme
+#    (FIRSTNAME_LASTNAME_N_MLB) has no relationship to the MLBAM numeric
+#    hitterId this pipeline uses everywhere else, and no crosswalk exists.
+#    Every event's own "players" object carries a real display "name"
+#    field per playerID (e.g. "Zac Thornton" -- confirmedly NOT always a
+#    literal firstName+lastName concatenation, e.g. "Zachary" vs "Zac"),
+#    which is what this module joins on via the SAME norm_name()
+#    discipline already used for cross-source name matching elsewhere in
+#    this pipeline -- one normalization function, not a second ad-hoc one.
+#  - Prices are American odds as strings ("+1900", "-137") -- cast to
+#    float, same as the previous integration; nothing about the actual
+#    number format changed.
+#
+# Pure math below (american_to_decimal, devig_two_way, compute_edge,
+# milestone_threshold_to_k) is UNCHANGED from the prior integration --
+# none of it depends on which API the prices came from, only on having a
+# real American-odds price, which SportsGameOdds also provides in the
+# same format. Only the fetch/parse layer is new.
 # ============================================================================
 
 import re
 import unicodedata
 
-# HR-only: batter_hits_alternate dropped to cut per-event cost in half after
-# running out of credits on the free tier (500/mo) -- see header note above.
-MARKETS = "batter_home_runs_alternate"
-# draftkings/fanduel: soft recreational books, the actual lines you'd bet.
-# pinnacle: the sharp benchmark the industry devigs against -- a genuinely
-# different comparison than two soft books, confirmed free-tier via the
-# official bookmaker list (region "eu", not "us" -- doesn't matter, the docs
-# confirm `bookmakers=` mixes keys across regions in one request). One real
-# caveat from that same page: "Odds are from public website which may incur
-# a delay" -- not guaranteed as real-time as DK/FD.
-# novig: a peer-to-peer exchange (region "us_ex", alongside Kalshi/
-# Polymarket), not a traditional bookmaker taking the other side -- near-zero
-# vig by construction, a second independent fair-price reference alongside
-# Pinnacle. Also confirmed free-tier.
-# Quota impact of both additions: zero. Region-equivalent cost is bookmaker-
-# COUNT based (every group of up to 10 = 1 region), and four bookmakers is
-# still comfortably inside the first region -- same 1 credit/event as before.
-# Bet365 deliberately NOT added: checked the official bookmaker list and it
-# doesn't cover MLB at any tier -- the only Bet365 listing anywhere is
-# bet365_au, scoped to AFL/NRL only, and paid-tier even for that.
-BOOKMAKERS = "draftkings,pinnacle,novig,fanduel"
-MARKET_TO_STAT = {
-    "batter_home_runs_alternate": "hr",
-}
+BASE_URL = "https://api.sportsgameodds.com/v2/events"
+STAT_ID = "batting_homeRuns"
+# Wildcard statEntityID -- confirmed to mean "any player" against a real
+# pull, not a literal player search.
+ODD_IDS = f"{STAT_ID}-PLAYER_ID-game-ou-over,{STAT_ID}-PLAYER_ID-game-ou-under"
 
 
 def _nv(v):
@@ -82,8 +84,6 @@ def _nv(v):
 
 
 def american_to_decimal(price):
-    """Exact, ordinary conversion -- not the direction the docs warn about
-    rounding on. None-safe."""
     p = _nv(price)
     if p is None or p == 0:
         return None
@@ -91,20 +91,16 @@ def american_to_decimal(price):
 
 
 def norm_name(name):
-    """Same normalization discipline already used everywhere else in this
-    pipeline for cross-source name matching (retrospectives, lineup joins) --
-    one function, not a second ad-hoc version for odds data."""
     n = unicodedata.normalize("NFKD", str(name or "")).encode("ascii", "ignore").decode()
     return re.sub(r"[^a-z ]", "", n.lower()).strip()
 
 
 def devig_two_way(price_over, price_under):
     """Multiplicative devig of a two-sided Over/Under market -> the BOOK'S
-    OWN no-vig fair probabilities (fair_over, fair_under), or (None, None) if
-    either price is missing. This is a DIAGNOSTIC number -- "what does the
-    book itself think is fair, independent of its own margin" -- for
-    comparing against the model's own no-vig probability apples-to-apples.
-    It is NOT the edge calculation; see compute_edge() for that."""
+    OWN no-vig fair probabilities (fair_over, fair_under). Diagnostic only
+    -- see compute_edge() for the actual EV number. Unchanged from the
+    prior integration; this math doesn't care which API the prices came
+    from."""
     do, du = american_to_decimal(price_over), american_to_decimal(price_under)
     if do is None or du is None:
         return None, None
@@ -116,21 +112,9 @@ def devig_two_way(price_over, price_under):
 
 
 def compute_edge(model_prob, book_price_american):
-    """The actionable number: expected value per $1 staked at the book's
-    ACTUAL (vigged) price, using the model's probability as the true rate.
-
-    edge = model_prob * decimal_odds - 1
-
-    This is the standard, correct EV formula -- NOT a probability-vs-
-    probability comparison. Comparing my no-vig probability directly against
-    a devigged book probability would answer a different, softer question
-    ("do we agree on the true rate") and silently present it as if it were
-    the same thing as "is this bet profitable at the price actually offered."
-    Those are two different numbers (see devig_two_way for the first one);
-    this function computes only the second, and only the second is called
-    'edge' anywhere in this pipeline, to avoid exactly that confusion.
-
-    Returns None if either input is unusable -- never a fabricated 0."""
+    """edge = model_prob * decimal_odds - 1 -- expected value per $1 staked
+    at the book's actual (vigged) price. Unchanged from the prior
+    integration. Returns None on any unusable input, never a fabricated 0."""
     p = _nv(model_prob)
     dec = american_to_decimal(book_price_american)
     if p is None or dec is None:
@@ -138,54 +122,157 @@ def compute_edge(model_prob, book_price_american):
     return round(p * dec - 1, 4)
 
 
-def parse_event_odds(payload, markets=MARKET_TO_STAT):
-    """One /events/{id}/odds response -> nested dict:
-        {stat: {player_norm_name: {point: {book_key: {"over": price, "under": price}}}}}
-    stat is 'hr' (via MARKET_TO_STAT), not the raw market key -- so
-    callers never need to know The Odds API's key names past this function.
-
-    Defensive throughout: a malformed or partial bookmaker/market/outcome is
-    skipped, never raised past this function -- one bad entry in a 15-event
-    pull must not take down the rest of the slate's odds."""
-    out = {}
-    if not isinstance(payload, dict):
-        return out
-    for bm in payload.get("bookmakers") or []:
-        if not isinstance(bm, dict):
-            continue
-        book_key = bm.get("key")
-        if not book_key:
-            continue
-        for mkt in bm.get("markets") or []:
-            if not isinstance(mkt, dict):
-                continue
-            stat = markets.get(mkt.get("key"))
-            if not stat:
-                continue
-            for oc in mkt.get("outcomes") or []:
-                if not isinstance(oc, dict):
-                    continue
-                name = str(oc.get("name") or "").strip().lower()  # 'over'/'under'
-                if name not in ("over", "under"):
-                    continue
-                player = norm_name(oc.get("description"))
-                point = _nv(oc.get("point"))
-                price = _nv(oc.get("price"))
-                if not player or point is None or price is None:
-                    continue
-                stat_d = out.setdefault(stat, {})
-                player_d = stat_d.setdefault(player, {})
-                point_d = player_d.setdefault(point, {})
-                book_d = point_d.setdefault(book_key, {})
-                book_d[name] = price
-    return out
-
-
 def milestone_threshold_to_k(point):
-    """DK/FD post a milestone line as 'Over 1.5' meaning >=2 -- the point is
-    the HALF-INTEGER just below the count threshold, always. k = point + 0.5,
-    rounded, defensively (0.5 -> 1, 1.5 -> 2, 2.5 -> 3, ...)."""
+    """Same convention as before: DK/FD/etc. post a milestone line as
+    'Over 1.5' meaning >=2 -- point is always the half-integer just below
+    the count threshold. k = point + 0.5, rounded defensively."""
     p = _nv(point)
     if p is None:
         return None
     return int(round(p + 0.5))
+
+
+# Sharp/soft classification -- researched, not guessed. A live pull shows
+# this feed can return 60+ distinct book keys; most are regional UK/EU/AU
+# books that won't realistically carry US MLB player props at all, so this
+# only classifies the ones actually relevant here, each with real sourcing
+# rather than assumed from "offshore = recreational" intuition (which
+# turned out wrong for several of these -- BetOnline, Bovada, and MyBookie
+# are explicitly classified sharp by multiple current sources, not soft).
+#
+# SHARP: welcomes winners, sets/moves its own lines rather than copying,
+# low margin. Pinnacle is the universal reference; Circa is the sharpest
+# regulated US operator specifically; BetOnline/Bovada/MyBookie set their
+# own numbers and don't limit winners the way retail books do.
+SHARP_BOOKS = {"pinnacle", "circa", "betonline", "bovada", "mybookie"}
+
+# EXCHANGE: no bookmaker at all -- bettors trade against each other, price
+# is pure market consensus with no house margin to set. Functionally the
+# sharpest category that exists, structurally distinct from a book that
+# chooses to price sharp. Novig and Prophet Exchange are the two
+# confirmed-available real-money sports exchanges here; Betfair Exchange
+# and Matchbook also showed up in the raw book-key list from a real pull
+# and are exchanges by the same definition.
+EXCHANGE_BOOKS = {"novig", "prophetexchange", "betfairexchange", "matchbook"}
+
+# PREDICTION_MARKET: not sports betting at all, but same "pure market
+# price, no bookmaker" structure as an exchange -- Polymarket and Kalshi
+# both showed up in a real pull's book-key list.
+PREDICTION_MARKETS = {"polymarket", "kalshi"}
+
+# SOFT: major regulated US retail sportsbooks. Cater to recreational
+# volume, generally copy sharp lines with a delay and added margin, and
+# are the ones known to limit consistently-winning accounts.
+SOFT_BOOKS = {"draftkings", "fanduel", "betmgm", "caesars", "espnbet",
+              "fanatics", "hardrockbet", "betrivers", "betparx", "ballybet",
+              "fliff", "bet365"}
+
+# PICKEM: fundamentally not a sportsbook -- fixed-multiplier pick'em/DFS
+# platforms (PrizePicks, Underdog). Not comparable to sharp/soft at all;
+# kept as its own bucket so it's never accidentally averaged into either.
+PICKEM_BOOKS = {"underdog", "prizepicks"}
+
+
+def book_category(book_key):
+    """Returns 'sharp', 'exchange', 'prediction_market', 'soft', 'pickem',
+    or None if the book isn't in any researched bucket -- 'unknown' (a
+    real, literal source name this feed returns) and the ~35 regional
+    international books seen in a real pull but not classified here both
+    correctly return None rather than a guessed category."""
+    if book_key in SHARP_BOOKS:
+        return "sharp"
+    if book_key in EXCHANGE_BOOKS:
+        return "exchange"
+    if book_key in PREDICTION_MARKETS:
+        return "prediction_market"
+    if book_key in SOFT_BOOKS:
+        return "soft"
+    if book_key in PICKEM_BOOKS:
+        return "pickem"
+    return None
+
+
+def sharp_vs_soft_fair(books_at_threshold):
+    """Given one threshold's {book_key: {"over": price, "under": price}}
+    dict, returns (sharp_fair_over, soft_fair_over, sharp_n, soft_n) --
+    the devigged consensus (mean of each book's own devig) on each side,
+    using only books where BOTH over and under prices are present (devig
+    needs both). Exchange and prediction-market books count toward the
+    "sharp" side, matching their real structural sharpness even though
+    they aren't technically bookmakers -- pickem and unclassified books
+    count toward neither, not silently dropped, just excluded from both
+    consensus numbers since they're not comparable this way.
+
+    Returns None for either side that has zero qualifying books rather
+    than fabricating a consensus from nothing."""
+    sharp_fairs, soft_fairs = [], []
+    for bk, prices in books_at_threshold.items():
+        cat = book_category(bk)
+        if cat not in ("sharp", "exchange", "prediction_market", "soft"):
+            continue
+        over, under = prices.get("over"), prices.get("under")
+        if over is None or under is None:
+            continue
+        fair_over, _ = devig_two_way(over, under)
+        if fair_over is None:
+            continue
+        if cat == "soft":
+            soft_fairs.append(fair_over)
+        else:
+            sharp_fairs.append(fair_over)
+    sharp_avg = round(sum(sharp_fairs) / len(sharp_fairs), 4) if sharp_fairs else None
+    soft_avg = round(sum(soft_fairs) / len(soft_fairs), 4) if soft_fairs else None
+    return sharp_avg, soft_avg, len(sharp_fairs), len(soft_fairs)
+
+
+def parse_event_odds(event):
+    """One SportsGameOdds /v2/events entry (a single game, with its own
+    embedded 'odds' and 'players' objects) -> nested dict:
+        {player_norm_name: {point: {book_key: {"over": price, "under": price}}}}
+    Same output shape the rest of this pipeline (refresh_odds.py) already
+    expects from the old integration, so nothing downstream of this
+    function needs to change -- only how it gets built.
+
+    Buckets each bookmaker under ITS OWN reported threshold (see module
+    docstring) rather than assuming a shared one -- this is the one real
+    behavioral difference from a naive port of the old parser, and the
+    one confirmed necessary by live data, not decided in the abstract.
+
+    Defensive throughout: a malformed or partial odds/player entry is
+    skipped, never raised past this function."""
+    out = {}
+    if not isinstance(event, dict):
+        return out
+    players = event.get("players") or {}
+    odds = event.get("odds") or {}
+    for odd_id, entry in odds.items():
+        if not isinstance(entry, dict):
+            continue
+        if entry.get("statID") != STAT_ID:
+            continue
+        if entry.get("betTypeID") != "ou":
+            continue
+        side = entry.get("sideID")
+        if side not in ("over", "under"):
+            continue
+        player_id = entry.get("playerID") or entry.get("statEntityID")
+        player_info = players.get(player_id) or {}
+        player_name = player_info.get("name")
+        player = norm_name(player_name)
+        if not player:
+            continue
+        by_book = entry.get("byBookmaker") or {}
+        for book_key, book_data in by_book.items():
+            if not isinstance(book_data, dict):
+                continue
+            if not book_data.get("available"):
+                continue
+            point = _nv(book_data.get("overUnder"))
+            price = _nv(book_data.get("odds"))
+            if point is None or price is None:
+                continue
+            stat_d = out.setdefault(player, {})
+            point_d = stat_d.setdefault(point, {})
+            book_d = point_d.setdefault(book_key, {})
+            book_d[side] = price
+    return out
